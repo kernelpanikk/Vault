@@ -6,6 +6,8 @@
 	<string>local.stefano.vault</string>
 	<key>CFBundleName</key>
 	<string>Vault</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>Vault</string>
 	<key>CFBundlePackageType</key>

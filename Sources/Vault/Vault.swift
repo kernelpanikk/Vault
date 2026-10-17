@@ -10,8 +10,12 @@ struct Vault {
     var bundleURL: URL { dir.appending(path: "vault.sparsebundle") }
     var mountURL: URL { dir.appending(path: ".mnt") }
 
-    static let standard = Vault(dir: FileManager.default
-        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Vault"))
+    static let standard: Vault = {
+        #if DEBUG // lets a debug build run on a throwaway vault: VAULT_DIR=/tmp/x Vault.app/Contents/MacOS/Vault
+        if let dir = ProcessInfo.processInfo.environment["VAULT_DIR"] { return Vault(dir: URL(fileURLWithPath: dir)) }
+        #endif
+        return Vault(dir: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Vault"))
+    }()
 
     /// Real space the encrypted bundle takes on the Mac (the volume itself reports its 200 GB maximum).
     var sizeOnDisk: Int64 {
