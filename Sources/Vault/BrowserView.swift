@@ -48,10 +48,10 @@ extension AppModel {
     }
 
     private func list(_ dir: URL) -> [URL] {
+        // Hidden items the user imported are shown; only the volume's own bookkeeping files are not.
         let urls = (try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-            options: .skipsHiddenFiles)) ?? []
-        return urls.sorted { a, b in
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])) ?? []
+        return urls.filter { !$0.isSystemFile }.sorted { a, b in
             a.isFolder != b.isFolder ? a.isFolder
                 : a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending
         }
