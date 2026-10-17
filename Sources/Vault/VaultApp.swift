@@ -136,10 +136,16 @@ final class AppModel {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var idleTimer: Timer?
+    private var sigterm: DispatchSourceSignal?
 
     func applicationWillFinishLaunching(_ notification: Notification) { Theme.registerFonts() }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // kill/pkill send SIGTERM, which skips applicationWillTerminate: route it through a normal quit.
+        signal(SIGTERM, SIG_IGN)
+        sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        sigterm?.setEventHandler { NSApp.terminate(nil) }
+        sigterm?.resume()
         UserDefaults.standard.register(defaults: ["lockMinutes": 5, "NSQuitAlwaysKeepsWindows": false])
         let lock: @Sendable (Notification) -> Void = { [model] _ in MainActor.assumeIsolated { model.lock() } }
 
