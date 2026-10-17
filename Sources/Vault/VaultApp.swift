@@ -196,25 +196,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct VaultCommands: Commands {
     let model: AppModel
 
+    // No .disabled tied to model state: menu items are not reliably refreshed, so each action checks the state itself.
     var body: some Commands {
-        let locked = model.state != .unlocked
         CommandGroup(replacing: .newItem) {
             Button("Nuova cartella") { model.newFolder() }
-                .keyboardShortcut("n", modifiers: [.command, .shift]).disabled(locked)
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             Button("Cartella superiore") { model.openParent() }
-                .keyboardShortcut(.upArrow, modifiers: .command).disabled(locked)
+                .keyboardShortcut(.upArrow, modifiers: .command)
             Button("Importa…") { model.importPanel() }
-                .keyboardShortcut("o").disabled(locked)
-            Button("Esporta…") { model.confirmExport = true }
-                .keyboardShortcut("e", modifiers: [.command, .shift]).disabled(locked || model.selection.isEmpty)
+                .keyboardShortcut("o")
+            Button("Esporta…") { model.askExport(model.selection) }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
-            Button("Elimina") { model.confirmDelete = true }
-                .keyboardShortcut(.delete).disabled(locked || model.selection.isEmpty)
+            Button("Elimina") { model.askDelete(model.selection) }
+                .keyboardShortcut(.delete)
             Divider()
             Button("Blocca") { model.lock() }
-                .keyboardShortcut("l").disabled(locked)
+                .keyboardShortcut("l")
             Button("Blocca e compatta") { model.lockAndCompact() }
-                .disabled(locked)
         }
     }
 }
