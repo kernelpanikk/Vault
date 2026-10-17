@@ -92,6 +92,14 @@ extension URL {
         ].contains(name)
     }
 
+    /// A move inside the vault that changes something: not the root, not into itself or its own folder.
+    func canMove(into dir: URL, root: URL) -> Bool {
+        isUnder(root) && path != root.path && dir.isUnder(root) && !dir.isUnder(self)
+            && deletingLastPathComponent().path != dir.path
+    }
+
+    var parentFolder: URL { URL(fileURLWithPath: deletingLastPathComponent().path, isDirectory: true) }
+
     /// True for `root` itself or anything below it, after resolving `..`.
     func isUnder(_ root: URL) -> Bool {
         let path = standardizedFileURL.path, rootPath = root.standardizedFileURL.path

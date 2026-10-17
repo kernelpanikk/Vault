@@ -36,11 +36,9 @@ enum Theme {
     static let space3: CGFloat = 12
     static let space4: CGFloat = 16
     static let space6: CGFloat = 24
-    static let space8: CGFloat = 32
     static let space12: CGFloat = 48
     static let radiusSm: CGFloat = 4
     static let radiusMd: CGFloat = 8
-    static let radiusLg: CGFloat = 12
     static let controlH: CGFloat = 28
     static let controlHLg: CGFloat = 40
     static let sidebarW: CGFloat = 220

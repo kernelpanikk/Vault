@@ -14,6 +14,14 @@ check(root.isUnder(root), "radice del vault")
 check(!URL(fileURLWithPath: "/v/.mnt/../secret").isUnder(root), "rifiuta ..")
 check(!URL(fileURLWithPath: "/v/.mntx/a").isUnder(root), "rifiuta prefisso simile")
 
+// Moves inside the vault.
+let a = URL(fileURLWithPath: "/v/.mnt/a", isDirectory: true), b = URL(fileURLWithPath: "/v/.mnt/b", isDirectory: true)
+check(URL(fileURLWithPath: "/v/.mnt/a/f.jpg").canMove(into: b, root: root), "sposta file in altra cartella")
+check(!a.canMove(into: a.appending(path: "sotto"), root: root), "rifiuta cartella dentro se stessa")
+check(!URL(fileURLWithPath: "/v/.mnt/f.jpg").canMove(into: root, root: root), "rifiuta spostamento nella stessa cartella")
+check(!URL(fileURLWithPath: "/Users/x/f.jpg").canMove(into: b, root: root), "rifiuta file da fuori archivio")
+check(!root.canMove(into: b, root: root), "rifiuta la radice")
+
 // Hidden items the user imported stay visible; volume bookkeeping does not.
 check(!URL(fileURLWithPath: "/v/.mnt/.segreta").isSystemFile, "cartella nascosta dell'utente visibile")
 check(URL(fileURLWithPath: "/v/.mnt/.DS_Store").isSystemFile, ".DS_Store nascosto")
