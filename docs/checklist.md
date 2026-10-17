@@ -6,7 +6,7 @@ esegue le voci marcate (auto); le altre sono a mano. Usare la build Release
 
 | | Voce | Come |
 |---|---|---|
-| [ ] | Da bloccata: in `~/Library/Application Support/Vault/` c'è solo `vault.sparsebundle`, nessun volume montato | auto |
+| [ ] | Da bloccata: in `~/Library/Application Support/Vault/` ci sono solo `vault.sparsebundle` e `touchid` (password cifrata dal Secure Enclave), nessun volume montato | auto |
 | [ ] | Da sbloccata: il volume non è nella barra laterale del Finder, né sulla scrivania, né in `/Volumes` | auto (`/Volumes`) + a mano |
 | [ ] | `mdfind` con il nome di un file importato non restituisce nulla | auto |
 | [ ] | Nessuna miniatura nuova nella cache di Quick Look | auto |

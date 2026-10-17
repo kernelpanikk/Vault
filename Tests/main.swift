@@ -26,10 +26,16 @@ do {
     check(vault.isMounted, "montato")
     check(FileManager.default.fileExists(atPath: vault.mountURL.appending(path: ".metadata_never_index").path), "Spotlight escluso")
     try Data("ciao".utf8).write(to: vault.mountURL.appending(path: "a.txt"))
+    let big = vault.mountURL.appending(path: "big.bin")
+    try Data(count: 80 << 20).write(to: big)
+    try FileManager.default.removeItem(at: big)
 
     vault.unmount()
     check(!vault.isMounted, "smontato")
-    check(vault.sizeOnDisk > 0 && vault.sizeOnDisk < 1 << 30, "spazio reale, non il massimo da 1 TB")
+    check(vault.sizeOnDisk > 0 && vault.sizeOnDisk < 1 << 30, "spazio reale, non il massimo da 200 GB")
+    let before = vault.sizeOnDisk
+    try vault.compact(password: "correct horse")
+    check(vault.sizeOnDisk < before - (60 << 20), "compatta: \(before >> 20) MB → \(vault.sizeOnDisk >> 20) MB")
     check(!FileManager.default.fileExists(atPath: vault.mountURL.path), "da bloccato resta solo il sparsebundle")
 
     try vault.mount(password: "correct horse")

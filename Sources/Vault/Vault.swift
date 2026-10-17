@@ -13,7 +13,7 @@ struct Vault {
     static let standard = Vault(dir: FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Vault"))
 
-    /// Real space the encrypted bundle takes on the Mac (the volume itself reports its 1 TB maximum).
+    /// Real space the encrypted bundle takes on the Mac (the volume itself reports its 200 GB maximum).
     var sizeOnDisk: Int64 {
         let files = FileManager.default.enumerator(at: bundleURL, includingPropertiesForKeys: [.totalFileAllocatedSizeKey])
         return (files?.allObjects as? [URL] ?? []).reduce(0) {
@@ -32,7 +32,7 @@ struct Vault {
 
     func create(password: String) throws {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try hdiutil(["create", "-size", "1t", "-type", "SPARSEBUNDLE", "-fs", "APFS",
+        try hdiutil(["create", "-size", "200g", "-type", "SPARSEBUNDLE", "-fs", "JHFS+", // HFS+: hdiutil compact reclaims deleted space, APFS barely
                      "-encryption", "AES-256", "-stdinpass", "-volname", "Vault", bundleURL.path], stdin: password)
     }
 
@@ -47,6 +47,11 @@ struct Vault {
         }
         // mdutil -i off needs root; this marker keeps Spotlight out without it.
         FileManager.default.createFile(atPath: mountURL.appending(path: ".metadata_never_index").path, contents: nil)
+    }
+
+    /// Gives back to the Mac the space of deleted files. Only works on a detached vault.
+    func compact(password: String) throws {
+        try hdiutil(["compact", bundleURL.path, "-stdinpass", "-batteryallowed"], stdin: password)
     }
 
     func unmount() {
