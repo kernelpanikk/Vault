@@ -21,7 +21,9 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if model.state == .unlocked { BrowserView() } else { LockView() }
+        Group { if model.state == .unlocked { BrowserView() } else { LockView() } }
+            .tint(Theme.brass)
+            .containerBackground(Theme.bg, for: .window) // title bar shares the window ground
     }
 }
 
@@ -135,6 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private var idleTimer: Timer?
 
+    func applicationWillFinishLaunching(_ notification: Notification) { Theme.registerFonts() }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: ["lockMinutes": 5, "NSQuitAlwaysKeepsWindows": false])
         let lock: @Sendable (Notification) -> Void = { [model] _ in MainActor.assumeIsolated { model.lock() } }
@@ -208,11 +212,13 @@ struct SettingsView: View {
     @AppStorage("lockOnBackground") private var onBackground = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.gap) {
+        VStack(alignment: .leading, spacing: Theme.space3) {
             Stepper("Blocca dopo \(minutes) min di inattività", value: $minutes, in: 1...60)
             Toggle("Blocca quando passi a un'altra app", isOn: $onBackground)
         }
-        .padding(Theme.padding)
+        .font(Theme.body)
+        .tint(Theme.brass)
+        .padding(Theme.space6)
         .fixedSize() // window sized to its content, so nothing is clipped
     }
 }

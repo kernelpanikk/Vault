@@ -49,8 +49,8 @@ struct Viewer: View {
     }
 
     private var controls: some View {
-        HStack(spacing: Theme.gap) {
-            Button { model.viewing = nil } label: { Image(systemName: "xmark") }
+        HStack(spacing: Theme.space3) {
+            Button { model.viewing = nil } label: { Theme.icon("close") }
                 .keyboardShortcut(.cancelAction)
             Button { step(-1) } label: { Image(systemName: "chevron.left") }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -68,12 +68,12 @@ struct Viewer: View {
             }
         }
         .buttonStyle(.borderless)
-        .foregroundStyle(.white)
-        .padding(.horizontal, Theme.gap * 1.5)
-        .padding(.vertical, Theme.gap / 2)
-        .background(.ultraThinMaterial, in: Capsule())
-        .environment(\.colorScheme, .dark)
-        .padding(Theme.gap)
+        .font(Theme.meta)
+        .foregroundStyle(Theme.onScrim)
+        .padding(.horizontal, Theme.space4)
+        .padding(.vertical, Theme.space2)
+        .background(Theme.scrim, in: RoundedRectangle(cornerRadius: Theme.radiusMd))
+        .padding(Theme.space4)
     }
 
     private func step(_ offset: Int) {

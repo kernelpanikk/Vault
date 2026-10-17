@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -16,7 +17,6 @@ extension URL {
     var type: UTType { UTType(filenameExtension: pathExtension) ?? .data }
     var isVideo: Bool { type.conforms(to: .audiovisualContent) }
     var isMedia: Bool { type.conforms(to: .image) || isVideo }
-    var icon: NSImage { NSWorkspace.shared.icon(for: isFolder ? .folder : type) } // type icon, never a Quick Look preview
     var size: Int { (try? resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0 }
     var modified: Date { (try? resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast }
 }
@@ -197,20 +197,28 @@ struct BrowserView: View {
 
     var body: some View {
         @Bindable var model = model
+        let count = model.selection.count
         NavigationSplitView {
             List(selection: $model.folder) {
                 OutlineGroup(model.tree, children: \.children) { node in
-                    Label(node.url == model.root ? "Archivio" : node.url.lastPathComponent, systemImage: "folder")
-                        .onDrop(of: AppModel.dropTypes, isTargeted: nil) { model.drop($0, into: node.url) }
+                    Label {
+                        Text(node.url == model.root ? "Archivio" : node.url.lastPathComponent).font(Theme.label)
+                    } icon: {
+                        Theme.icon("folder").foregroundStyle(model.folder == node.url ? Theme.brass : Theme.inkMuted)
+                    }
+                    .onDrop(of: AppModel.dropTypes, isTargeted: nil) { model.drop($0, into: node.url) }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.surface)
             .safeAreaInset(edge: .bottom) {
-                Text(model.usedSpace).font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.gap)
+                Text(model.usedSpace).font(Theme.meta).foregroundStyle(Theme.inkMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.space4)
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+            .navigationSplitViewColumnWidth(min: 180, ideal: Theme.sidebarW, max: 320)
         } detail: {
             content
+                .background(Theme.bg)
                 .onDrop(of: AppModel.dropTypes, isTargeted: $targeted) { model.drop($0, into: model.folder ?? model.root) }
                 .focusable()
                 .focused($focused)
@@ -228,13 +236,14 @@ struct BrowserView: View {
                 .onCommand(#selector(NSResponder.selectAll(_:))) { model.selection = Set(model.items) }
                 .onAppear { focused = true }
         }
+        .tint(Theme.brass)
         .overlay { if let url = model.viewing { Viewer(url: url) } }
         .navigationTitle(model.folder.map { $0 == model.root ? "Archivio" : $0.lastPathComponent } ?? "Archivio")
         .toolbar { toolbar }
-        .confirmationDialog("Eliminare \(model.selection.count) elementi?", isPresented: $model.confirmDelete) {
-            Button("Elimina", role: .destructive) { model.deleteSelection() }
+        .confirmationDialog("Eliminare \(count) \(count == 1 ? "elemento" : "elementi") per sempre?", isPresented: $model.confirmDelete) {
+            Button("Elimina \(count) \(count == 1 ? "elemento" : "elementi")", role: .destructive) { model.deleteSelection() }
         } message: {
-            Text("L'eliminazione è definitiva.")
+            Text("Non finiscono nel Cestino e non si possono recuperare.")
         }
         .alert("Rinomina", isPresented: present($model.renaming)) {
             TextField("Nome", text: $newName)
@@ -244,20 +253,20 @@ struct BrowserView: View {
         .onChange(of: model.renaming) { _, url in
             if let url { renameTarget = url; newName = url.lastPathComponent }
         }
-        .alert("Esportare \(model.selection.count) elementi?", isPresented: $model.confirmExport) {
-            Button("Esporta…") { model.export() }
+        .alert("Esportare \(count) \(count == 1 ? "elemento" : "elementi")?", isPresented: $model.confirmExport) {
+            Button("Scegli cartella…") { model.export() }
             Button("Annulla", role: .cancel) {}
         } message: {
-            Text("Le copie esportate non sono cifrate.")
+            Text("Le copie fuori da Vault non sono cifrate e restano visibili nel Finder.")
         }
         .alert("Spostare gli originali nel Cestino?", isPresented: present($model.originals)) {
             Button("Sposta nel Cestino") { model.trashOriginals() }
             Button("Lascia dove sono", role: .cancel) {}
         } message: {
-            Text("Poi svuota il Cestino. Le foto della libreria Foto vanno eliminate da Foto.")
+            Text("Le copie sono già cifrate in Vault. Poi svuota il Cestino; le foto della libreria Foto vanno eliminate da Foto.")
         }
         .alert(model.problem ?? "", isPresented: present($model.problem)) {
-            Button("OK") {}
+            Button("Chiudi") {}
         }
         .frame(minWidth: 760, minHeight: 480)
     }
@@ -265,17 +274,19 @@ struct BrowserView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup {
             if model.busy { ProgressView().controlSize(.small) }
-            Button { model.newFolder() } label: { Label("Nuova cartella", systemImage: "folder.badge.plus") }
-            Button { model.importPanel() } label: { Label("Importa", systemImage: "square.and.arrow.down") }
+            Button { model.newFolder() } label: { Label { Text("Nuova cartella") } icon: { Theme.icon("folder-plus", size: 20) } }
+                .help("Nuova cartella (⇧⌘N)")
+            Button { model.importPanel() } label: { Label { Text("Importa") } icon: { Theme.icon("import", size: 20) } }
+                .help("Importa (⌘O)")
             if !listView {
-                Slider(value: $thumbSize, in: Theme.thumbRange).frame(width: 100).help("Dimensione miniature")
+                Slider(value: $thumbSize, in: Theme.thumbRange).tint(Theme.brass).frame(width: 100).help("Dimensione miniature")
             }
             Picker("Vista", selection: $listView) {
-                Label("Icone", systemImage: "square.grid.2x2").tag(false)
-                Label("Elenco", systemImage: "list.bullet").tag(true)
+                Label { Text("Griglia") } icon: { Theme.icon("grid") }.tag(false)
+                Label { Text("Elenco") } icon: { Theme.icon("list") }.tag(true)
             }
             .pickerStyle(.segmented)
-            Button { model.lock() } label: { Label("Blocca", systemImage: "lock") }
+            Button { model.lock() } label: { Label { Text("Blocca") } icon: { Theme.icon("lock", size: 20) } }
                 .help("Blocca (⌘L)")
         }
     }
@@ -284,33 +295,46 @@ struct BrowserView: View {
         if model.items.isEmpty { empty } else if listView { table } else { grid }
     }
 
+    /// EmptyState inside a DropZone: one teaching sentence, one action.
     private var empty: some View {
-        ContentUnavailableView {
-            Label("Trascina qui foto e video", systemImage: "photo.on.rectangle.angled")
-        } description: {
-            Text("Oppure usa Importa (⌘O).")
+        VStack(alignment: .leading, spacing: Theme.space3) {
+            Theme.icon(targeted ? "import" : "eye-off", size: 32).foregroundStyle(targeted ? Theme.brass : Theme.inkMuted)
+            Text(targeted ? "Rilascia per nascondere" : "Ancora niente qui").font(Theme.title).foregroundStyle(Theme.ink)
+            Text("Trascina foto e video dal Finder in questa finestra. Dopo l'importazione puoi spostare gli originali nel Cestino.")
+                .font(Theme.headline.weight(.regular)).foregroundStyle(Theme.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.space2) {
+                Button { model.importPanel() } label: {
+                    HStack(spacing: Theme.space2) { Theme.icon("import"); Text("Scegli file…") }
+                }
+                .buttonStyle(PrimaryButton())
+                Text("oppure premi ⌘O").font(Theme.meta).foregroundStyle(Theme.inkMuted)
+            }
         }
+        .frame(maxWidth: 420, alignment: .leading)
+        .padding(Theme.space12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            RoundedRectangle(cornerRadius: Theme.radius * 2)
-                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
-                .foregroundStyle(targeted ? Color.accentColor : Color.secondary.opacity(0.35))
-                .padding(Theme.padding)
+            RoundedRectangle(cornerRadius: Theme.radiusMd)
+                .fill(targeted ? Theme.brassSubtle : .clear)
+                .strokeBorder(targeted ? Theme.brass : Theme.lineStrong, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                .padding(Theme.space6)
         }
+        .animation(Theme.quick, value: targeted)
     }
 
     private var grid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: Theme.gap)], spacing: Theme.gap) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: Theme.space2)], spacing: Theme.space2) {
                 ForEach(model.items) { url in
-                    Cell(url: url, size: thumbSize, selected: model.selection.contains(url))
+                    Tile(url: url, selected: model.selection.contains(url))
                         .onTapGesture(count: 2) { model.open(url) }
                         .simultaneousGesture(TapGesture().onEnded { model.select(url); focused = true })
                         .onDrag { model.provider(for: url) }
                         .onDrop(of: url.isFolder ? AppModel.dropTypes : [], isTargeted: nil) { model.drop($0, into: url) }
                 }
             }
-            .padding(Theme.gap)
+            .padding(Theme.space6)
         }
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { model.selection = []; focused = true })
     }
@@ -319,18 +343,23 @@ struct BrowserView: View {
         @Bindable var model = model
         return Table(of: URL.self, selection: $model.selection) {
             TableColumn("Nome") { url in
-                Label { Text(url.lastPathComponent) } icon: { Image(nsImage: url.icon).resizable().frame(width: 16, height: 16) }
+                Label { Text(url.lastPathComponent).font(Theme.body) } icon: {
+                    Theme.icon(url.isFolder ? "folder" : url.isVideo ? "video" : "image").foregroundStyle(Theme.inkMuted)
+                }
             }
-            TableColumn("Tipo") { url in Text(url.isFolder ? "Cartella" : url.type.localizedDescription ?? "") }
+            TableColumn("Tipo") { url in
+                Text(url.isFolder ? "Cartella" : url.type.localizedDescription ?? "").font(Theme.body).foregroundStyle(Theme.inkMuted)
+            }
             TableColumn("Dimensione") { url in
-                Text(url.isFolder ? "—" : ByteCountFormatter.string(fromByteCount: Int64(url.size), countStyle: .file))
+                Text(url.isFolder ? "—" : ByteCountFormatter.string(fromByteCount: Int64(url.size), countStyle: .file)).font(Theme.meta)
             }
-            TableColumn("Modificato") { url in Text(url.modified, format: .dateTime) }
+            TableColumn("Modificato") { url in Text(url.modified, format: .dateTime).font(Theme.meta) }
         } rows: {
             ForEach(model.items) { url in
                 TableRow(url).itemProvider { model.provider(for: url) }
             }
         }
+        .scrollContentBackground(.hidden)
         .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { urls in
             if urls.count == 1, let url = urls.first { model.open(url) }
         }
@@ -341,42 +370,62 @@ struct BrowserView: View {
     }
 }
 
-struct Cell: View {
+/// MediaTile: square, `radius-sm`, no caption on media; selection = brass outline + check badge.
+struct Tile: View {
     let url: URL
-    let size: Double
     let selected: Bool
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Thumb(url: url)
-                .frame(width: size, height: size)
-                .background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: Theme.radius))
-            Text(url.lastPathComponent)
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .padding(.horizontal, 6)
-                .foregroundStyle(selected ? .white : .primary)
-                .background(selected ? Color.accentColor : .clear, in: Capsule())
-        }
-        .frame(width: size)
-        .contentShape(Rectangle())
-    }
-}
-
-struct Thumb: View {
-    let url: URL
     @State private var image: NSImage?
+    @State private var duration: String?
 
     var body: some View {
-        Image(nsImage: image ?? url.icon)
-            .resizable()
-            .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radius / 2))
-            .overlay(alignment: .bottomTrailing) {
-                if url.isVideo { Image(systemName: "play.circle.fill").foregroundStyle(.white).shadow(radius: 2).padding(6) }
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .background(Theme.surface)
+            .overlay {
+                if url.isFolder {
+                    VStack(spacing: Theme.space2) {
+                        Theme.icon("folder", size: 32).foregroundStyle(Theme.inkMuted)
+                        Text(url.lastPathComponent).font(Theme.label).foregroundStyle(Theme.ink)
+                            .lineLimit(2).multilineTextAlignment(.center).padding(.horizontal, Theme.space2)
+                    }
+                } else if let image {
+                    Image(nsImage: image).resizable().scaledToFill()
+                } else {
+                    Theme.icon(url.isVideo ? "video" : "image", size: 24).foregroundStyle(Theme.inkMuted)
+                }
             }
-            .padding(6)
-            .task(id: url) { if url.isMedia { image = await Thumbnails.shared.image(for: url) } }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
+            .overlay(alignment: .bottomLeading) {
+                if url.isVideo {
+                    HStack(spacing: Theme.space1) {
+                        Theme.icon("play", size: 12)
+                        if let duration { Text(duration) }
+                    }
+                    .font(Theme.meta).foregroundStyle(Theme.onScrim)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Theme.scrim, in: RoundedRectangle(cornerRadius: Theme.radiusSm))
+                    .padding(Theme.space1)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Theme.icon("check", size: 14).foregroundStyle(Theme.onBrass)
+                        .frame(width: 20, height: 20).background(Theme.brass, in: Circle()).padding(Theme.space1)
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Theme.radiusSm)
+                    .strokeBorder(selected ? Theme.brass : Theme.line, lineWidth: selected ? 2 : 1)
+            }
+            .contentShape(Rectangle())
+            .help(url.lastPathComponent)
+            .task(id: url) {
+                guard url.isMedia else { return }
+                image = await Thumbnails.shared.image(for: url)
+                if url.isVideo, let time = try? await AVURLAsset(url: url).load(.duration), time.isNumeric {
+                    let seconds = Int(time.seconds)
+                    duration = String(format: "%d:%02d", seconds / 60, seconds % 60)
+                }
+            }
     }
 }

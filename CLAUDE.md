@@ -35,7 +35,14 @@ Solo locale. Al blocco il volume viene smontato.
 
 ## Stile
 - Ponytail: il minimo codice che funziona. Prima API di sistema.
-- Token di design solo in Theme.swift.
+- Token di design solo in Theme.swift, presi dal design system "Vault"
+  (claude.ai/artifact/21hQm2FSHgtY5X8UWwFkbm): colori OKLCH convertiti in sRGB,
+  Hanken Grotesk + IBM Plex Mono in Resources/Fonts, icone SVG in Resources/Icons,
+  icona app Resources/AppIcon.icns da design/vault-mark.svg.
+- Testi in italiano (regola del progetto), ma con le regole di contenuto del
+  design system: verbi specifici, conseguenze esplicite, niente "OK".
+- Solo build di debug: VAULT_DIR=<cartella> usa un archivio di prova,
+  VAULT_TEST_PASSWORD=<pw> lo sblocca da solo (per screenshot).
 - Testi UI in italiano, brevi.
 
 ## Comandi
