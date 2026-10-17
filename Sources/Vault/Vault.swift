@@ -60,7 +60,9 @@ struct Vault {
 
     func unmount() {
         if isMounted { try? hdiutil(["detach", mountURL.path, "-force"]) }
-        rmdir(mountURL.path) // only removes an empty dir: never touches vault contents
+        // rmdir only removes an empty dir, never vault contents.
+        // shortcut: while the app runs, macOS may keep the (empty) mountpoint busy, so it can stay until the next launch.
+        rmdir(mountURL.path)
     }
 
     private func hdiutil(_ args: [String], stdin: String? = nil) throws {
