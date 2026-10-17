@@ -255,6 +255,7 @@ struct BrowserView: View {
         .toolbar { toolbar }
         .confirmationDialog("Eliminare \(count) \(count == 1 ? "elemento" : "elementi") per sempre?", isPresented: $model.confirmDelete) {
             Button("Elimina \(count) \(count == 1 ? "elemento" : "elementi")", role: .destructive) { model.deleteSelection() }
+                .keyboardShortcut(.defaultAction) // Return confirms (user's choice); Esc still cancels
         } message: {
             Text("Non finiscono nel Cestino e non si possono recuperare.")
         }
