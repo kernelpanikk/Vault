@@ -37,7 +37,8 @@ func unique(_ url: URL) -> URL {
 extension AppModel {
     static let dropTypes: [UTType] = [.fileURL]
 
-    var root: URL { vault.mountURL }
+    /// Folder URLs are always built as directories, so the same folder compares equal wherever it came from.
+    var root: URL { URL(fileURLWithPath: vault.mountURL.path, isDirectory: true) }
 
     func reload() {
         guard state == .unlocked else { return }
@@ -51,7 +52,7 @@ extension AppModel {
         // Hidden items the user imported are shown; only the volume's own bookkeeping files are not.
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])) ?? []
-        return urls.filter { !$0.isSystemFile }.sorted { a, b in
+        return urls.filter { !$0.isSystemFile }.map { URL(fileURLWithPath: $0.path, isDirectory: $0.isFolder) }.sorted { a, b in
             a.isFolder != b.isFolder ? a.isFolder
                 : a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending
         }
@@ -206,6 +207,7 @@ struct BrowserView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: Theme.sidebarW, max: 320)
         } detail: {
             content
+                .safeAreaInset(edge: .top, spacing: 0) { breadcrumbs }
                 .background(Theme.bg)
                 .onDrop(of: AppModel.dropTypes, isTargeted: $targeted) { model.drop($0, into: model.folder ?? model.root) }
                 .focusable()
@@ -341,6 +343,43 @@ struct BrowserView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { model.selection = []; focused = true })
+    }
+
+    /// Path from "Archivio" to the open folder; each crumb opens its folder and accepts drops.
+    private var breadcrumbs: some View {
+        var trail = [model.folder ?? model.root]
+        while let last = trail.last, last.path != model.root.path, last.isUnder(model.root) {
+            trail.append(URL(fileURLWithPath: last.deletingLastPathComponent().path, isDirectory: true))
+        }
+        let crumbs = Array(trail.reversed())
+        return HStack(spacing: Theme.space1) {
+            ForEach(crumbs.indices, id: \.self) { i in
+                if i > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.inkMuted) }
+                crumb(crumbs[i], current: i == crumbs.count - 1)
+            }
+        }
+        .padding(.horizontal, Theme.space6 - 6)
+        .padding(.vertical, Theme.space2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.bg)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.line).frame(height: 1) }
+    }
+
+    private func crumb(_ url: URL, current: Bool) -> some View {
+        Button { if !current { model.folder = url } } label: {
+            HStack(spacing: Theme.space1) {
+                Theme.icon("folder", size: 14)
+                Text(url.path == model.root.path ? "Archivio" : url.lastPathComponent).lineLimit(1)
+            }
+            .font(Theme.label)
+            .foregroundStyle(current ? Theme.ink : Theme.inkMuted)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(dropFolder == url ? Theme.brassSubtle : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusSm))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onDrop(of: AppModel.dropTypes, isTargeted: target(url)) { model.drop($0, into: url) }
     }
 
     private func sidebarRow(_ url: URL) -> some View {

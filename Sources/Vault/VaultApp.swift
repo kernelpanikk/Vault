@@ -78,7 +78,7 @@ final class AppModel {
         self.password = password
         countAtActivation = NSPasteboard.general.changeCount
         state = .unlocked
-        folder = vault.mountURL
+        folder = root
     }
 
     func unlockWithBiometrics() async {
