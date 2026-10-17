@@ -13,7 +13,7 @@ extension URL: @retroactive Identifiable {
 }
 
 extension URL {
-    var isFolder: Bool { (try? resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+    var isFolder: Bool { hasDirectoryPath } // vault URLs are built with isDirectory (see list), so no disk access
     var type: UTType { UTType(filenameExtension: pathExtension) ?? .data }
     var isVideo: Bool { type.conforms(to: .audiovisualContent) }
     var isMedia: Bool { type.conforms(to: .image) || isVideo }
@@ -40,9 +40,13 @@ extension AppModel {
     /// Folder URLs are always built as directories, so the same folder compares equal wherever it came from.
     var root: URL { URL(fileURLWithPath: vault.mountURL.path, isDirectory: true) }
 
+    /// Reads every band of the bundle, so only after unlock, import and delete, never on navigation.
+    func refreshUsedSpace() {
+        usedSpace = ByteCountFormatter.string(fromByteCount: vault.sizeOnDisk, countStyle: .file) + " usati"
+    }
+
     func reload() {
         guard state == .unlocked else { return }
-        usedSpace = ByteCountFormatter.string(fromByteCount: vault.sizeOnDisk, countStyle: .file) + " usati"
         tree = [Folder(url: root, children: subfolders(root))]
         items = list(folder ?? root)
         selection.formIntersection(items)
@@ -52,7 +56,9 @@ extension AppModel {
         // Hidden items the user imported are shown; only the volume's own bookkeeping files are not.
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])) ?? []
-        return urls.filter { !$0.isSystemFile }.map { URL(fileURLWithPath: $0.path, isDirectory: $0.isFolder) }.sorted { a, b in
+        return urls.filter { !$0.isSystemFile }.map {
+            URL(fileURLWithPath: $0.path, isDirectory: (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true)
+        }.sorted { a, b in
             a.isFolder != b.isFolder ? a.isFolder
                 : a.lastPathComponent.localizedStandardCompare(b.lastPathComponent) == .orderedAscending
         }
@@ -78,7 +84,7 @@ extension AppModel {
 
     func openParent() {
         guard state == .unlocked, let folder, folder.path != root.path else { return }
-        self.folder = URL(fileURLWithPath: folder.deletingLastPathComponent().path, isDirectory: true)
+        self.folder = folder.parentFolder
     }
 
     func open(_ url: URL) {
@@ -87,7 +93,7 @@ extension AppModel {
 
     func newFolder() {
         guard state == .unlocked else { return }
-        let url = unique((folder ?? root).appending(path: "Nuova cartella"))
+        let url = URL(fileURLWithPath: unique((folder ?? root).appending(path: "Nuova cartella")).path, isDirectory: true)
         do { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) } catch { return fail(error) }
         reload()
         selection = [url]
@@ -96,7 +102,11 @@ extension AppModel {
 
     func rename(_ url: URL, to name: String) {
         let name = name.trimmingCharacters(in: .whitespaces)
-        guard url.isUnder(root), !name.isEmpty, !name.contains("/"), !name.hasPrefix("."), name != url.lastPathComponent else { return }
+        guard url.isUnder(root), name != url.lastPathComponent else { return }
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !URL(fileURLWithPath: name).isSystemFile else {
+            problem = "“\(name)” non è un nome valido."
+            return
+        }
         do { try FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent().appending(path: name)) } catch { fail(error) }
         reload()
     }
@@ -106,6 +116,7 @@ extension AppModel {
             do { try FileManager.default.removeItem(at: url) } catch { fail(error) }
         }
         reload()
+        refreshUsedSpace()
     }
 
     /// Files already in the vault move; files from the Finder are imported (copied).
@@ -124,16 +135,8 @@ extension AppModel {
     }
 
     private func move(_ source: URL, into dir: URL) {
-        guard source.isUnder(root), source.path != root.path, dir.isUnder(root), !dir.isUnder(source),
-              source.deletingLastPathComponent().path != dir.path else { return }
+        guard source.canMove(into: dir, root: root) else { return }
         do { try FileManager.default.moveItem(at: source, to: unique(dir.appending(path: source.lastPathComponent))) } catch { fail(error) }
-    }
-
-    /// A plain file URL: dropped inside the app it moves, dropped in the Finder or another app it is exported in clear.
-    func provider(for url: URL) -> NSItemProvider {
-        let provider = NSItemProvider(object: url as NSURL)
-        provider.suggestedName = url.lastPathComponent
-        return provider
     }
 
     func importFiles(_ urls: [URL], into dir: URL) async {
@@ -145,6 +148,7 @@ extension AppModel {
         }.value
         busy = false
         reload()
+        refreshUsedSpace()
         if copied.count < sources.count { problem = "\(sources.count - copied.count) elementi non importati." }
         if !copied.isEmpty { originals = copied }
     }
@@ -354,7 +358,7 @@ struct BrowserView: View {
     private var breadcrumbs: some View {
         var trail = [model.folder ?? model.root]
         while let last = trail.last, last.path != model.root.path, last.isUnder(model.root) {
-            trail.append(URL(fileURLWithPath: last.deletingLastPathComponent().path, isDirectory: true))
+            trail.append(last.parentFolder)
         }
         let crumbs = Array(trail.reversed())
         return HStack(spacing: Theme.space1) {
@@ -442,7 +446,7 @@ struct BrowserView: View {
             TableColumn("Modificato") { url in Text(url.modified, format: .dateTime).font(Theme.meta) }
         } rows: {
             ForEach(model.items) { url in
-                TableRow(url).itemProvider { model.provider(for: url) }
+                TableRow(url).draggable(url) // file URL: moved when dropped in the app, exported in clear outside
             }
         }
         .scrollContentBackground(.hidden)
