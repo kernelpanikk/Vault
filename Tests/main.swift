@@ -14,6 +14,12 @@ check(root.isUnder(root), "radice del vault")
 check(!URL(fileURLWithPath: "/v/.mnt/../secret").isUnder(root), "rifiuta ..")
 check(!URL(fileURLWithPath: "/v/.mntx/a").isUnder(root), "rifiuta prefisso simile")
 
+// Hidden items the user imported stay visible; volume bookkeeping does not.
+check(!URL(fileURLWithPath: "/v/.mnt/.segreta").isSystemFile, "cartella nascosta dell'utente visibile")
+check(URL(fileURLWithPath: "/v/.mnt/.DS_Store").isSystemFile, ".DS_Store nascosto")
+check(URL(fileURLWithPath: "/v/.mnt/.fseventsd").isSystemFile, ".fseventsd nascosto")
+check(URL(fileURLWithPath: "/v/.mnt/._foto.jpg").isSystemFile, "AppleDouble nascosto")
+
 // Create / mount / unmount on a throwaway vault.
 let vault = Vault(dir: FileManager.default.temporaryDirectory.appending(path: "vault-test-\(UUID().uuidString)"))
 defer { vault.unmount(); try? FileManager.default.removeItem(at: vault.dir) }

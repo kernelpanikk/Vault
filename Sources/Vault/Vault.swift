@@ -83,6 +83,15 @@ struct Vault {
 }
 
 extension URL {
+    /// Files macOS keeps in every volume or folder by itself, never imported by the user.
+    var isSystemFile: Bool {
+        let name = lastPathComponent
+        return name.hasPrefix("._") || name.hasPrefix(".HFS+ Private") || [
+            ".DS_Store", ".metadata_never_index", ".fseventsd", ".Trashes", ".Spotlight-V100", ".TemporaryItems",
+            ".DocumentRevisions-V100", ".journal", ".journal_info_block", ".VolumeIcon.icns", ".com.apple.timemachine.donotpresent",
+        ].contains(name)
+    }
+
     /// True for `root` itself or anything below it, after resolving `..`.
     func isUnder(_ root: URL) -> Bool {
         let path = standardizedFileURL.path, rootPath = root.standardizedFileURL.path
