@@ -9,7 +9,7 @@ flags=(-O)
 app=build/Vault.app
 rm -rf $app
 mkdir -p $app/Contents/MacOS
-swiftc -swift-version 5 -target arm64-apple-macos15.0 -parse-as-library $flags Sources/Vault/*.swift -o $app/Contents/MacOS/Vault
+swiftc -swift-version 5 -target arm64-apple-macos26.0 -parse-as-library $flags Sources/Vault/*.swift -o $app/Contents/MacOS/Vault
 cp Resources/Info.plist $app/Contents/
 mkdir -p $app/Contents/Resources
 cp -R Resources/Icons Resources/Fonts Resources/AppIcon.icns $app/Contents/Resources/

@@ -64,7 +64,7 @@ extension AppModel {
 
     /// Finder-style click: plain, ⌘ toggles, ⇧ extends from the last click.
     func select(_ url: URL) {
-        let flags = NSEvent.modifierFlags
+        let flags = NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags // the click's own modifiers
         if flags.contains(.command) {
             selection.formSymmetricDifference([url])
         } else if flags.contains(.shift), let anchor, let a = items.firstIndex(of: anchor), let b = items.firstIndex(of: url) {
@@ -185,6 +185,7 @@ struct BrowserView: View {
     @State private var targeted = false
     @State private var dropFolder: URL?   // folder under a drag, highlighted
     @State private var gridWidth: CGFloat = 0
+    @State private var cursor: URL?       // moving end of a Shift+arrow selection; `anchor` is the fixed end
     @State private var renameTarget: URL?
     @State private var newName = ""
     @FocusState private var focused: Bool
@@ -215,7 +216,7 @@ struct BrowserView: View {
                     model.renaming = model.selection.first
                     return .handled
                 }
-                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { arrow($0.key) }
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { arrow($0) }
                 .onKeyPress(.space) {
                     guard let url = model.items.first(where: { model.selection.contains($0) && $0.isMedia }) else { return .ignored }
                     model.viewing = url
@@ -319,14 +320,17 @@ struct BrowserView: View {
                         Tile(url: url, selected: model.selection.contains(url), dropTarget: dropFolder == url)
                             .id(url)
                             .onTapGesture(count: 2) { model.open(url) }
-                            .simultaneousGesture(TapGesture().onEnded { model.select(url); focused = true })
-                            .onDrag { model.provider(for: url) }
+                            .simultaneousGesture(TapGesture().onEnded { model.select(url); cursor = nil; focused = true })
+                            .draggable(containerItemID: url)
                             .onDrop(of: url.isFolder ? AppModel.dropTypes : [], isTargeted: target(url)) { model.drop($0, into: url) }
                     }
                 }
                 .padding(Theme.space6)
+                // Dragging a selected tile drags the whole selection, as file URLs (moved in-app, copied outside).
+                .dragContainer(for: URL.self) { ids in ids }
+                .dragContainerSelection(model.items.filter { model.selection.contains($0) })
             }
-            .onChange(of: model.anchor) { _, url in if let url { proxy.scrollTo(url) } }
+            .onChange(of: cursor ?? model.anchor) { _, url in if let url { proxy.scrollTo(url) } }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { model.selection = []; focused = true })
@@ -345,15 +349,21 @@ struct BrowserView: View {
         .onDrop(of: AppModel.dropTypes, isTargeted: target(url)) { model.drop($0, into: url) }
     }
 
-    /// Arrow keys move the selection through the grid; up/down jump one row.
-    private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
-        guard !listView, !model.items.isEmpty else { return .ignored }
+    /// Arrow keys move the selection through the grid (up/down jump one row); with Shift they extend it.
+    private func arrow(_ press: KeyPress) -> KeyPress.Result {
+        let items = model.items
+        guard !listView, !items.isEmpty else { return .ignored }
         let columns = max(1, Int((gridWidth - 2 * Theme.space6 + Theme.space2) / (thumbSize + Theme.space2)))
-        let step = [KeyEquivalent.leftArrow: -1, .rightArrow: 1, .upArrow: -columns, .downArrow: columns][key] ?? 0
-        let current = model.anchor.flatMap { model.items.firstIndex(of: $0) }
-        let next = current.map { min(max($0 + step, 0), model.items.count - 1) } ?? 0
-        model.selection = [model.items[next]]
-        model.anchor = model.items[next]
+        let step = [KeyEquivalent.leftArrow: -1, .rightArrow: 1, .upArrow: -columns, .downArrow: columns][press.key] ?? 0
+        let current = (cursor ?? model.anchor).flatMap { items.firstIndex(of: $0) }
+        let next = current.map { min(max($0 + step, 0), items.count - 1) } ?? 0
+        if press.modifiers.contains(.shift), let start = model.anchor.flatMap({ items.firstIndex(of: $0) }) {
+            model.selection = Set(items[min(start, next)...max(start, next)])
+        } else {
+            model.selection = [items[next]]
+            model.anchor = items[next]
+        }
+        cursor = items[next]
         return .handled
     }
 
