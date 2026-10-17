@@ -35,8 +35,7 @@ func unique(_ url: URL) -> URL {
 // MARK: - File operations
 
 extension AppModel {
-    static let itemType = "local.vault.item"
-    static let dropTypes = [UTType(importedAs: itemType), .fileURL]
+    static let dropTypes: [UTType] = [.fileURL]
 
     var root: URL { vault.mountURL }
 
@@ -103,18 +102,14 @@ extension AppModel {
         reload()
     }
 
-    /// Drops from the Finder import (copy); drops from inside the app move.
+    /// Files already in the vault move; files from the Finder are imported (copied).
     func drop(_ providers: [NSItemProvider], into dir: URL) -> Bool {
         Task {
             var outside: [URL] = []
             for provider in providers {
-                if provider.hasItemConformingToTypeIdentifier(Self.itemType),
-                   let data = try? await provider.loadItem(forTypeIdentifier: Self.itemType) as? Data {
-                    move(URL(fileURLWithPath: String(decoding: data, as: UTF8.self)), into: dir)
-                } else if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    outside.append(url)
-                }
+                guard let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil) else { continue }
+                if url.isUnder(root) { move(url, into: dir) } else { outside.append(url) }
             }
             if !outside.isEmpty { await importFiles(outside, into: dir) }
             reload()
@@ -128,13 +123,10 @@ extension AppModel {
         do { try FileManager.default.moveItem(at: source, to: unique(dir.appending(path: source.lastPathComponent))) } catch { fail(error) }
     }
 
-    /// Drag payload visible only to this process, so nothing can be dragged out in clear.
+    /// A plain file URL: dropped inside the app it moves, dropped in the Finder or another app it is exported in clear.
     func provider(for url: URL) -> NSItemProvider {
-        let provider = NSItemProvider()
-        provider.registerDataRepresentation(forTypeIdentifier: Self.itemType, visibility: .ownProcess) { done in
-            done(Data(url.path.utf8), nil)
-            return nil
-        }
+        let provider = NSItemProvider(object: url as NSURL)
+        provider.suggestedName = url.lastPathComponent
         return provider
     }
 
@@ -191,6 +183,8 @@ struct BrowserView: View {
     @AppStorage("thumbSize") private var thumbSize = Theme.thumbDefault
     @AppStorage("listView") private var listView = false
     @State private var targeted = false
+    @State private var dropFolder: URL?   // folder under a drag, highlighted
+    @State private var gridWidth: CGFloat = 0
     @State private var renameTarget: URL?
     @State private var newName = ""
     @FocusState private var focused: Bool
@@ -200,14 +194,7 @@ struct BrowserView: View {
         let count = model.selection.count
         NavigationSplitView {
             List(selection: $model.folder) {
-                OutlineGroup(model.tree, children: \.children) { node in
-                    Label {
-                        Text(node.url == model.root ? "Archivio" : node.url.lastPathComponent).font(Theme.label)
-                    } icon: {
-                        Theme.icon("folder").foregroundStyle(model.folder == node.url ? Theme.brass : Theme.inkMuted)
-                    }
-                    .onDrop(of: AppModel.dropTypes, isTargeted: nil) { model.drop($0, into: node.url) }
-                }
+                OutlineGroup(model.tree, children: \.children) { node in sidebarRow(node.url) }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.surface)
@@ -228,6 +215,7 @@ struct BrowserView: View {
                     model.renaming = model.selection.first
                     return .handled
                 }
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { arrow($0.key) }
                 .onKeyPress(.space) {
                     guard let url = model.items.first(where: { model.selection.contains($0) && $0.isMedia }) else { return .ignored }
                     model.viewing = url
@@ -324,19 +312,56 @@ struct BrowserView: View {
     }
 
     private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: Theme.space2)], spacing: Theme.space2) {
-                ForEach(model.items) { url in
-                    Tile(url: url, selected: model.selection.contains(url))
-                        .onTapGesture(count: 2) { model.open(url) }
-                        .simultaneousGesture(TapGesture().onEnded { model.select(url); focused = true })
-                        .onDrag { model.provider(for: url) }
-                        .onDrop(of: url.isFolder ? AppModel.dropTypes : [], isTargeted: nil) { model.drop($0, into: url) }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: Theme.space2)], spacing: Theme.space2) {
+                    ForEach(model.items) { url in
+                        Tile(url: url, selected: model.selection.contains(url), dropTarget: dropFolder == url)
+                            .id(url)
+                            .onTapGesture(count: 2) { model.open(url) }
+                            .simultaneousGesture(TapGesture().onEnded { model.select(url); focused = true })
+                            .onDrag { model.provider(for: url) }
+                            .onDrop(of: url.isFolder ? AppModel.dropTypes : [], isTargeted: target(url)) { model.drop($0, into: url) }
+                    }
                 }
+                .padding(Theme.space6)
             }
-            .padding(Theme.space6)
+            .onChange(of: model.anchor) { _, url in if let url { proxy.scrollTo(url) } }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { model.selection = []; focused = true })
+    }
+
+    private func sidebarRow(_ url: URL) -> some View {
+        let active = model.folder == url || dropFolder == url
+        return Label {
+            Text(url == model.root ? "Archivio" : url.lastPathComponent).font(Theme.label)
+        } icon: {
+            Theme.icon("folder").foregroundStyle(active ? Theme.brass : Theme.inkMuted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .listRowBackground(dropFolder == url ? RoundedRectangle(cornerRadius: Theme.radiusMd).fill(Theme.brassSubtle) : nil)
+        .onDrop(of: AppModel.dropTypes, isTargeted: target(url)) { model.drop($0, into: url) }
+    }
+
+    /// Arrow keys move the selection through the grid; up/down jump one row.
+    private func arrow(_ key: KeyEquivalent) -> KeyPress.Result {
+        guard !listView, !model.items.isEmpty else { return .ignored }
+        let columns = max(1, Int((gridWidth - 2 * Theme.space6 + Theme.space2) / (thumbSize + Theme.space2)))
+        let step = [KeyEquivalent.leftArrow: -1, .rightArrow: 1, .upArrow: -columns, .downArrow: columns][key] ?? 0
+        let current = model.anchor.flatMap { model.items.firstIndex(of: $0) }
+        let next = current.map { min(max($0 + step, 0), model.items.count - 1) } ?? 0
+        model.selection = [model.items[next]]
+        model.anchor = model.items[next]
+        return .handled
+    }
+
+    /// Highlights a folder (grid tile or sidebar row) while something is dragged over it.
+    private func target(_ url: URL) -> Binding<Bool> {
+        Binding { dropFolder == url } set: { over in
+            if over { dropFolder = url } else if dropFolder == url { dropFolder = nil }
+        }
     }
 
     private var table: some View {
@@ -374,6 +399,7 @@ struct BrowserView: View {
 struct Tile: View {
     let url: URL
     let selected: Bool
+    var dropTarget = false
     @State private var image: NSImage?
     @State private var duration: String?
 
@@ -415,8 +441,10 @@ struct Tile: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.radiusSm)
-                    .strokeBorder(selected ? Theme.brass : Theme.line, lineWidth: selected ? 2 : 1)
+                    .strokeBorder(selected || dropTarget ? Theme.brass : Theme.line,
+                                  style: StrokeStyle(lineWidth: selected || dropTarget ? 2 : 1, dash: dropTarget ? [6, 4] : []))
             }
+            .background(dropTarget ? Theme.brassSubtle : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusSm))
             .contentShape(Rectangle())
             .help(url.lastPathComponent)
             .task(id: url) {
