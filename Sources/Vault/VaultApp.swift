@@ -8,6 +8,7 @@ struct VaultApp: App {
         Window("Vault", id: "main") {
             RootView().environment(delegate.model)
         }
+        .defaultSize(width: 1000, height: 680)
         .windowResizability(.contentMinSize)
         .restorationBehavior(.disabled)
         .commands { VaultCommands(model: delegate.model) }
@@ -45,6 +46,7 @@ final class AppModel {
     var confirmExport = false
     var originals: [URL]?
     var problem: String?
+    var usedSpace = ""
 
     private var countAtActivation = 0 // pasteboard changeCount when the app last came to the front
     private var ownCount: Int?        // changeCount right after something was copied inside the app
@@ -188,11 +190,11 @@ struct SettingsView: View {
     @AppStorage("lockOnBackground") private var onBackground = false
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: Theme.gap) {
             Stepper("Blocca dopo \(minutes) min di inattività", value: $minutes, in: 1...60)
             Toggle("Blocca quando passi a un'altra app", isOn: $onBackground)
         }
         .padding(Theme.padding)
-        .frame(width: 380)
+        .fixedSize() // window sized to its content, so nothing is clipped
     }
 }

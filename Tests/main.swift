@@ -29,6 +29,7 @@ do {
 
     vault.unmount()
     check(!vault.isMounted, "smontato")
+    check(vault.sizeOnDisk > 0 && vault.sizeOnDisk < 1 << 30, "spazio reale, non il massimo da 1 TB")
     check(!FileManager.default.fileExists(atPath: vault.mountURL.path), "da bloccato resta solo il sparsebundle")
 
     try vault.mount(password: "correct horse")

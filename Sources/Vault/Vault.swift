@@ -13,6 +13,14 @@ struct Vault {
     static let standard = Vault(dir: FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Vault"))
 
+    /// Real space the encrypted bundle takes on the Mac (the volume itself reports its 1 TB maximum).
+    var sizeOnDisk: Int64 {
+        let files = FileManager.default.enumerator(at: bundleURL, includingPropertiesForKeys: [.totalFileAllocatedSizeKey])
+        return (files?.allObjects as? [URL] ?? []).reduce(0) {
+            $0 + Int64((try? $1.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
+        }
+    }
+
     var exists: Bool { FileManager.default.fileExists(atPath: bundleURL.path) }
 
     /// A mounted volume has a different device number from its parent folder.
