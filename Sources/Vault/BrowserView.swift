@@ -111,6 +111,19 @@ extension AppModel {
         reload()
     }
 
+    /// Delete and export act on these items; both ask for confirmation first.
+    func askDelete(_ urls: Set<URL>) {
+        guard state == .unlocked, !urls.isEmpty, renaming == nil else { return } // ⌘⌫ while renaming edits the text
+        selection = urls
+        confirmDelete = true
+    }
+
+    func askExport(_ urls: Set<URL>) {
+        guard state == .unlocked, !urls.isEmpty else { return }
+        selection = urls
+        confirmExport = true
+    }
+
     func deleteSelection() {
         for url in selection where url.isUnder(root) && url.path != root.path {
             do { try FileManager.default.removeItem(at: url) } catch { fail(error) }
@@ -340,6 +353,8 @@ struct BrowserView: View {
                             .onTapGesture(count: 2) { model.open(url) }
                             .simultaneousGesture(TapGesture().onEnded { model.select(url); cursor = nil; focused = true })
                             .draggable(containerItemID: url)
+                            // Right-click acts on the selection when the tile is part of it, else on the tile alone.
+                            .contextMenu { menu(for: model.selection.contains(url) ? model.selection : [url]) }
                             .onDrop(of: url.isFolder ? AppModel.dropTypes : [], isTargeted: target(url)) { model.drop($0, into: url) }
                     }
                 }
@@ -450,8 +465,20 @@ struct BrowserView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { urls in
+        .contextMenu(forSelectionType: URL.self) { urls in menu(for: urls) } primaryAction: { urls in
             if urls.count == 1, let url = urls.first { model.open(url) }
+        }
+    }
+
+    @ViewBuilder private func menu(for urls: Set<URL>) -> some View {
+        if urls.count == 1, let url = urls.first {
+            Button("Apri") { model.open(url) }
+            Button("Rinomina") { model.selection = urls; model.renaming = url }
+            Divider()
+        }
+        if !urls.isEmpty {
+            Button("Esporta…") { model.askExport(urls) }
+            Button("Elimina", role: .destructive) { model.askDelete(urls) }
         }
     }
 
