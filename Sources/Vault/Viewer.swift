@@ -9,6 +9,7 @@ struct Viewer: View {
     @State private var player: AVPlayer?
     @State private var zoom = 1.0
     @State private var pinch = 1.0
+    @State private var arrows: Any?
 
     private var media: [URL] { model.items.filter(\.isMedia) }
 
@@ -45,7 +46,21 @@ struct Viewer: View {
                 image = await Task.detached { NSImage(contentsOf: url) }.value
             }
         }
-        .onDisappear { player?.pause() }
+        .onAppear {
+            // ← → browse the folder even while the video player has focus (it would use them to seek).
+            arrows = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                guard event.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]) else { return event }
+                switch event.keyCode {
+                case 123: step(-1); return nil
+                case 124: step(1); return nil
+                default: return event
+                }
+            }
+        }
+        .onDisappear {
+            player?.pause()
+            if let arrows { NSEvent.removeMonitor(arrows) }
+        }
     }
 
     private var controls: some View {
@@ -53,9 +68,7 @@ struct Viewer: View {
             Button { model.viewing = nil } label: { Theme.icon("close") }
                 .keyboardShortcut(.cancelAction)
             Button { step(-1) } label: { Image(systemName: "chevron.left") }
-                .keyboardShortcut(.leftArrow, modifiers: [])
             Button { step(1) } label: { Image(systemName: "chevron.right") }
-                .keyboardShortcut(.rightArrow, modifiers: [])
             Text(url.lastPathComponent).lineLimit(1).truncationMode(.middle)
             if !url.isVideo {
                 Button { zoom = clamp(zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
@@ -77,7 +90,9 @@ struct Viewer: View {
     }
 
     private func step(_ offset: Int) {
-        guard let index = media.firstIndex(of: url), media.indices.contains(index + offset) else { return }
+        // reads model.viewing, not `url`: the key monitor keeps the copy of this view from when it appeared
+        guard let current = model.viewing, let index = media.firstIndex(of: current),
+              media.indices.contains(index + offset) else { return }
         model.viewing = media[index + offset]
     }
 

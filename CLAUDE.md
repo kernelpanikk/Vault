@@ -16,8 +16,9 @@ Solo locale. Al blocco il volume viene smontato.
 - window.sharingType = .none; niente state restoration; niente NSDocument.
 - Nessun file temporaneo in chiaro fuori dal volume montato.
 - Ogni evento di blocco chiama un'unica funzione lock() (AppModel, VaultApp.swift).
-- Trascinamento verso l'esterno vietato: i drag interni usano il tipo
-  `local.vault.item` con visibilità `.ownProcess`.
+- Drag and drop: ogni elemento si trascina come file URL. Rilasciato dentro
+  l'app viene spostato, nel Finder o in un'altra app viene esportato in chiaro
+  (scelta dell'utente, 17 Oct 2026, al posto del divieto iniziale).
 
 ## Decisioni dalla Fase 0 (17 Oct 2026)
 - Niente Xcode installato e SwiftPM delle Command Line Tools rotto
