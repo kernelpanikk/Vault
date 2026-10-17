@@ -46,9 +46,9 @@ enum Theme {
     static let sidebarW: CGFloat = 220
     static let lockColumn: CGFloat = 320
 
-    static let thumbRange: ClosedRange<Double> = 120...280
+    static let thumbRange: ClosedRange<Double> = 80...400
     static let thumbDefault: Double = 160  // tile-min
-    static let thumbPixels: CGFloat = 560  // 2x the largest tile
+    static let thumbPixels: CGFloat = 640  // sharp up to ~320pt tiles on Retina; larger ones upscale slightly
     static let thumbMemory = 200 << 20     // NSCache cost limit in bytes
 
     // MARK: Motion — ease-out quart; locking itself is never animated.

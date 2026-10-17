@@ -268,7 +268,13 @@ struct BrowserView: View {
             Button { model.importPanel() } label: { Label { Text("Importa") } icon: { Theme.icon("import", size: 20) } }
                 .help("Importa (⌘O)")
             if !listView {
-                Slider(value: $thumbSize, in: Theme.thumbRange).tint(Theme.brass).frame(width: 100).help("Dimensione miniature")
+                HStack(spacing: Theme.space1) {
+                    Theme.icon("image", size: 12).foregroundStyle(Theme.inkMuted)
+                    Slider(value: $thumbSize, in: Theme.thumbRange).tint(Theme.brass).frame(width: 120)
+                    Theme.icon("image", size: 20).foregroundStyle(Theme.inkMuted)
+                }
+                .help("Dimensione anteprime")
+                .accessibilityLabel("Dimensione anteprime")
             }
             Picker("Vista", selection: $listView) {
                 Label { Text("Griglia") } icon: { Theme.icon("grid") }.tag(false)
@@ -315,7 +321,8 @@ struct BrowserView: View {
     private var grid: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: Theme.space2)], spacing: Theme.space2) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize, maximum: thumbSize), spacing: Theme.space2)],
+                          alignment: .leading, spacing: Theme.space2) {
                     ForEach(model.items) { url in
                         Tile(url: url, selected: model.selection.contains(url), dropTarget: dropFolder == url)
                             .id(url)
