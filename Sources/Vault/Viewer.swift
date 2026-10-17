@@ -16,7 +16,7 @@ struct Viewer: View {
         ZStack {
             Theme.viewerBackground
             if url.isVideo {
-                VideoPlayer(player: player)
+                PlayerView(player: player)
             } else if let image {
                 GeometryReader { geo in
                     ScrollView([.horizontal, .vertical]) {
@@ -82,4 +82,20 @@ struct Viewer: View {
     }
 
     private func clamp(_ value: Double) -> Double { min(max(value, 1), 8) }
+}
+
+/// AppKit player. SwiftUI's VideoPlayer crashes on launch of the view (AVKit/SwiftUI overlay
+/// built with the macOS 26 SDK running on macOS 27), so it is never used.
+struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer?
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .floating
+        view.allowsPictureInPicturePlayback = false // PiP would show vault content outside the app
+        view.showsSharingServiceButton = false      // sharing would hand the clear file to AirDrop, Mail…
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) { view.player = player }
 }
