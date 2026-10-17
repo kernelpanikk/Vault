@@ -41,6 +41,7 @@ struct LockView: View {
         .textFieldStyle(.roundedBorder)
         .frame(width: Theme.lockWidth)
         .padding(Theme.padding * 1.5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity) // fill the window so it stays resizable
         .modifier(Shake(animatableData: CGFloat(attempts)))
         .onChange(of: model.error) { _, error in
             guard error != nil else { return }

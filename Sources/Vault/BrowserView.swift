@@ -40,14 +40,9 @@ extension AppModel {
 
     var root: URL { vault.mountURL }
 
-    var usedSpace: String {
-        guard let v = try? root.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]),
-              let total = v.volumeTotalCapacity, let free = v.volumeAvailableCapacity else { return "" }
-        return ByteCountFormatter.string(fromByteCount: Int64(total - free), countStyle: .file) + " usati"
-    }
-
     func reload() {
         guard state == .unlocked else { return }
+        usedSpace = ByteCountFormatter.string(fromByteCount: vault.sizeOnDisk, countStyle: .file) + " usati"
         tree = [Folder(url: root, children: subfolders(root))]
         items = list(folder ?? root)
         selection.formIntersection(items)
