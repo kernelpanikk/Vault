@@ -46,7 +46,8 @@ final class AppModel {
     var originals: [URL]?
     var problem: String?
 
-    private var pasteboardCount = 0
+    private var countAtActivation = 0 // pasteboard changeCount when the app last came to the front
+    private var ownCount: Int?        // changeCount right after something was copied inside the app
 
     init() {
         vault.unmount() // a crash or force quit may have left the volume mounted
@@ -69,7 +70,7 @@ final class AppModel {
             return
         }
         if remember && Biometrics.available { Keychain.save(password) }
-        pasteboardCount = NSPasteboard.general.changeCount
+        countAtActivation = NSPasteboard.general.changeCount
         state = .unlocked
         folder = vault.mountURL
     }
@@ -94,8 +95,20 @@ final class AppModel {
         state = .locked
     }
 
+    func appDidBecomeActive() { countAtActivation = NSPasteboard.general.changeCount }
+
+    func appDidResignActive() {
+        let count = NSPasteboard.general.changeCount
+        if count != countAtActivation { ownCount = count } // copied while Vault was in front
+    }
+
+    /// Clears only what came from the vault; copies made in other apps stay.
     private func clearPasteboard() {
-        // TODO(human)
+        let pasteboard = NSPasteboard.general
+        let copiedHere = (NSApp.isActive && pasteboard.changeCount != countAtActivation) || pasteboard.changeCount == ownCount
+        let vaultFiles = (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.contains { $0.isUnder(root) } == true
+        if copiedHere || vaultFiles { pasteboard.clearContents() }
+        ownCount = nil
     }
 }
 
@@ -117,7 +130,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().addObserver(forName: .init(name), object: nil, queue: .main, using: lock)
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [model] _ in
-            MainActor.assumeIsolated { if UserDefaults.standard.bool(forKey: "lockOnBackground") { model.lock() } }
+            MainActor.assumeIsolated {
+                model.appDidResignActive()
+                if UserDefaults.standard.bool(forKey: "lockOnBackground") { model.lock() }
+            }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [model] _ in
+            MainActor.assumeIsolated { model.appDidBecomeActive() }
         }
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
             MainActor.assumeIsolated {
