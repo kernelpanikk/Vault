@@ -25,8 +25,12 @@ Solo locale. Al blocco il volume viene smontato.
   diretto in scripts/build-app.sh (firma ad-hoc + Hardened Runtime).
   Test = eseguibile con assert in Tests/main.swift.
 - Keychain data-protection con biometryCurrentSet dà -34018 senza team di
-  firma. Fallback: LAContext + Keychain di login (Unlock.swift).
-  Quando ci sarà un team Apple ID, passare a kSecUseDataProtectionKeychain.
+  firma, e il Keychain di login mostrava finestre di sistema a ogni sblocco.
+  Soluzione: password sigillata (HPKE, CryptoKit) con una chiave Secure Enclave
+  biometryCurrentSet, salvata in Application Support/Vault/touchid (Unlock.swift).
+- Archivio HFS+ da 200 GB, non APFS: su APFS hdiutil compact recupera ~1%
+  dello spazio cancellato (misurato 4 MB su 300), su HFS+ quasi tutto.
+  Compattazione alla chiusura (applicationWillTerminate) e da menu.
 - mdutil -i off richiede root: si usa solo .metadata_never_index.
 
 ## Stile

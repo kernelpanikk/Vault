@@ -33,7 +33,7 @@ struct LockView: View {
             Button(setup ? "Crea archivio" : "Sblocca", action: submit)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSubmit)
-            if !setup && Biometrics.available {
+            if !setup && TouchID.available {
                 Button("Usa Touch ID") { Task { await model.unlockWithBiometrics() } }
                     .buttonStyle(.link)
             }

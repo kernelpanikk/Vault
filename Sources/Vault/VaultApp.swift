@@ -48,6 +48,7 @@ final class AppModel {
     var problem: String?
     var usedSpace = ""
 
+    private var password: String?     // kept only while unlocked, to compact after unmounting
     private var countAtActivation = 0 // pasteboard changeCount when the app last came to the front
     private var ownCount: Int?        // changeCount right after something was copied inside the app
 
@@ -71,21 +72,23 @@ final class AppModel {
             self.error = create ? "Impossibile creare l'archivio." : "Password errata."
             return
         }
-        if remember && Biometrics.available { Keychain.save(password) }
+        if remember { TouchID.save(password) }
+        self.password = password
         countAtActivation = NSPasteboard.general.changeCount
         state = .unlocked
         folder = vault.mountURL
     }
 
     func unlockWithBiometrics() async {
-        guard state == .locked, !busy, Biometrics.available,
-              await Biometrics.authenticate(), let password = Keychain.load() else { return }
+        guard state == .locked, !busy, TouchID.available, let password = await TouchID.load() else { return }
         await unlock(password: password, remember: false)
     }
 
     /// The single exit point: every lock event ends here.
-    func lock() {
+    func lock(compact: Bool = false) {
         guard state == .unlocked else { return }
+        let password = self.password
+        self.password = nil
         viewing = nil
         renaming = nil
         selection = []
@@ -95,6 +98,19 @@ final class AppModel {
         clearPasteboard()
         vault.unmount()
         state = .locked
+        if compact, let password { try? vault.compact(password: password) }
+    }
+
+    /// Menu version: compacts in the background; `busy` keeps the lock screen from unlocking meanwhile.
+    func lockAndCompact() {
+        guard state == .unlocked, let password else { return }
+        lock()
+        busy = true
+        let vault = vault
+        Task {
+            await Task.detached { try? vault.compact(password: password) }.value
+            busy = false
+        }
     }
 
     func appDidBecomeActive() { countAtActivation = NSPasteboard.general.changeCount }
@@ -158,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationWillTerminate(_ notification: Notification) { model.lock() }
+    func applicationWillTerminate(_ notification: Notification) { model.lock(compact: true) }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
@@ -181,6 +197,8 @@ struct VaultCommands: Commands {
             Divider()
             Button("Blocca") { model.lock() }
                 .keyboardShortcut("l").disabled(locked)
+            Button("Blocca e compatta") { model.lockAndCompact() }
+                .disabled(locked)
         }
     }
 }

@@ -2,7 +2,7 @@
 # Automatic part of docs/checklist.md. Usage: scripts/leakcheck.sh [nome-di-un-file-importato]
 dir="$HOME/Library/Application Support/Vault"
 
-echo "== Cartella dell'app (da bloccata: solo vault.sparsebundle)"
+echo "== Cartella dell'app (da bloccata: solo vault.sparsebundle e touchid)"
 ls -a "$dir"
 echo "== Volume del vault montato (da bloccata: nessuno)"
 mount | grep -F "Vault/.mnt" || echo "nessuno"
