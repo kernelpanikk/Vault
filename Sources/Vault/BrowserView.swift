@@ -76,6 +76,11 @@ extension AppModel {
         anchor = url
     }
 
+    func openParent() {
+        guard state == .unlocked, let folder, folder.path != root.path else { return }
+        self.folder = URL(fileURLWithPath: folder.deletingLastPathComponent().path, isDirectory: true)
+    }
+
     func open(_ url: URL) {
         if url.isFolder { folder = url } else if url.isMedia { viewing = url }
     }

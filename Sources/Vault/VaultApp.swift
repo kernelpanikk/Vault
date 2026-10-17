@@ -197,6 +197,8 @@ struct VaultCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("Nuova cartella") { model.newFolder() }
                 .keyboardShortcut("n", modifiers: [.command, .shift]).disabled(locked)
+            Button("Cartella superiore") { model.openParent() }
+                .keyboardShortcut(.upArrow, modifiers: .command).disabled(locked)
             Button("Importa…") { model.importPanel() }
                 .keyboardShortcut("o").disabled(locked)
             Button("Esporta…") { model.confirmExport = true }
