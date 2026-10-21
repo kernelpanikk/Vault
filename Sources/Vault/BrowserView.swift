@@ -42,7 +42,7 @@ extension AppModel {
 
     /// Reads every band of the bundle, so only after unlock, import and delete, never on navigation.
     func refreshUsedSpace() {
-        usedSpace = ByteCountFormatter.string(fromByteCount: vault.sizeOnDisk, countStyle: .file) + " usati"
+        usedSpace = String(localized: "\(ByteCountFormatter.string(fromByteCount: vault.sizeOnDisk, countStyle: .file)) used")
     }
 
     func reload() {
@@ -93,7 +93,7 @@ extension AppModel {
 
     func newFolder() {
         guard state == .unlocked else { return }
-        let url = URL(fileURLWithPath: unique((folder ?? root).appending(path: "Nuova cartella")).path, isDirectory: true)
+        let url = URL(fileURLWithPath: unique((folder ?? root).appending(path: String(localized: "New Folder"))).path, isDirectory: true)
         do { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false) } catch { return fail(error) }
         reload()
         selection = [url]
@@ -104,7 +104,7 @@ extension AppModel {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard url.isUnder(root), name != url.lastPathComponent else { return }
         guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !URL(fileURLWithPath: name).isSystemFile else {
-            problem = "“\(name)” non è un nome valido."
+            problem = String(localized: "“\(name)” isn't a valid name.")
             return
         }
         do { try FileManager.default.moveItem(at: url, to: url.deletingLastPathComponent().appending(path: name)) } catch { fail(error) }
@@ -162,7 +162,7 @@ extension AppModel {
         busy = false
         reload()
         refreshUsedSpace()
-        if copied.count < sources.count { problem = "\(sources.count - copied.count) elementi non importati." }
+        if copied.count < sources.count { problem = String(localized: "\(sources.count - copied.count) items couldn't be imported.") }
         if !copied.isEmpty { originals = copied }
     }
 
@@ -171,7 +171,7 @@ extension AppModel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
-        panel.prompt = "Importa"
+        panel.prompt = String(localized: "Import")
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         guard panel.runModal() == .OK else { return }
         Task { await importFiles(panel.urls, into: folder ?? root) }
@@ -188,7 +188,7 @@ extension AppModel {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
-        panel.prompt = "Esporta qui"
+        panel.prompt = String(localized: "Export Here")
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
         guard panel.runModal() == .OK, let dest = panel.url, !dest.isUnder(root) else { return }
         for url in selection {
@@ -223,8 +223,9 @@ struct BrowserView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.surface)
             .safeAreaInset(edge: .bottom) {
-                Text(model.usedSpace).font(Theme.meta).foregroundStyle(Theme.inkMuted)
+                Label(model.usedSpace, systemImage: "internaldrive").font(Theme.meta).foregroundStyle(Theme.inkMuted)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(Theme.space4)
+                    .overlay(alignment: .top) { Rectangle().fill(Theme.line).frame(height: 1) }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: Theme.sidebarW, max: 320)
         } detail: {
@@ -251,36 +252,36 @@ struct BrowserView: View {
         }
         .tint(Theme.brass)
         .overlay { if let url = model.viewing { Viewer(url: url) } }
-        .navigationTitle(model.folder.map { $0 == model.root ? "Archivio" : $0.lastPathComponent } ?? "Archivio")
+        .navigationTitle(model.folder.map { $0 == model.root ? String(localized: "Library") : $0.lastPathComponent } ?? String(localized: "Library"))
         .toolbar { toolbar }
-        .confirmationDialog("Eliminare \(count) \(count == 1 ? "elemento" : "elementi") per sempre?", isPresented: $model.confirmDelete) {
-            Button("Elimina \(count) \(count == 1 ? "elemento" : "elementi")", role: .destructive) { model.deleteSelection() }
+        .confirmationDialog("Delete \(count) items forever?", isPresented: $model.confirmDelete) {
+            Button("Delete \(count) items", role: .destructive) { model.deleteSelection() }
                 .keyboardShortcut(.defaultAction) // Return confirms (user's choice); Esc still cancels
         } message: {
-            Text("Non finiscono nel Cestino e non si possono recuperare.")
+            Text("They won't go to the Trash and can't be recovered.")
         }
-        .alert("Rinomina", isPresented: present($model.renaming)) {
-            TextField("Nome", text: $newName)
-            Button("Rinomina") { if let renameTarget { model.rename(renameTarget, to: newName) } }
-            Button("Annulla", role: .cancel) {}
+        .alert("Rename", isPresented: present($model.renaming)) {
+            TextField("Name", text: $newName)
+            Button("Rename") { if let renameTarget { model.rename(renameTarget, to: newName) } }
+            Button("Cancel", role: .cancel) {}
         }
         .onChange(of: model.renaming) { _, url in
             if let url { renameTarget = url; newName = url.lastPathComponent }
         }
-        .alert("Esportare \(count) \(count == 1 ? "elemento" : "elementi")?", isPresented: $model.confirmExport) {
-            Button("Scegli cartella…") { model.export() }
-            Button("Annulla", role: .cancel) {}
+        .alert("Export \(count) items?", isPresented: $model.confirmExport) {
+            Button("Choose Folder…") { model.export() }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Le copie fuori da Vault non sono cifrate e restano visibili nel Finder.")
+            Text("Copies outside Vault aren't encrypted and stay visible in Finder.")
         }
-        .alert("Spostare gli originali nel Cestino?", isPresented: present($model.originals)) {
-            Button("Sposta nel Cestino") { model.trashOriginals() }
-            Button("Lascia dove sono", role: .cancel) {}
+        .alert("Move the originals to the Trash?", isPresented: present($model.originals)) {
+            Button("Move to Trash") { model.trashOriginals() }
+            Button("Keep Originals", role: .cancel) {}
         } message: {
-            Text("Le copie sono già cifrate in Vault. Poi svuota il Cestino; le foto della libreria Foto vanno eliminate da Foto.")
+            Text("The copies are already encrypted in Vault. Empty the Trash afterwards; photos from the Photos library must be deleted in Photos.")
         }
         .alert(model.problem ?? "", isPresented: present($model.problem)) {
-            Button("Chiudi") {}
+            Button("Close") {}
         }
         .frame(minWidth: 760, minHeight: 480)
     }
@@ -288,26 +289,26 @@ struct BrowserView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup {
             if model.busy { ProgressView().controlSize(.small) }
-            Button { model.newFolder() } label: { Label { Text("Nuova cartella") } icon: { Theme.icon("folder-plus", size: 20) } }
-                .help("Nuova cartella (⇧⌘N)")
-            Button { model.importPanel() } label: { Label { Text("Importa") } icon: { Theme.icon("import", size: 20) } }
-                .help("Importa (⌘O)")
+            Button { model.newFolder() } label: { Label { Text("New Folder") } icon: { Theme.icon("folder-plus", size: 20) } }
+                .help("New Folder (⇧⌘N)")
+            Button { model.importPanel() } label: { Label { Text("Import") } icon: { Theme.icon("import", size: 20) } }
+                .help("Import (⌘O)")
             if !listView {
                 HStack(spacing: Theme.space1) {
                     Theme.icon("image", size: 12).foregroundStyle(Theme.inkMuted)
                     Slider(value: $thumbSize, in: Theme.thumbRange).tint(Theme.brass).frame(width: 120)
                     Theme.icon("image", size: 20).foregroundStyle(Theme.inkMuted)
                 }
-                .help("Dimensione anteprime")
-                .accessibilityLabel("Dimensione anteprime")
+                .help("Thumbnail Size")
+                .accessibilityLabel("Thumbnail Size")
             }
-            Picker("Vista", selection: $listView) {
-                Label { Text("Griglia") } icon: { Theme.icon("grid") }.tag(false)
-                Label { Text("Elenco") } icon: { Theme.icon("list") }.tag(true)
+            Picker("View", selection: $listView) {
+                Label { Text("Grid") } icon: { Theme.icon("grid") }.tag(false)
+                Label { Text("List") } icon: { Theme.icon("list") }.tag(true)
             }
             .pickerStyle(.segmented)
-            Button { model.lock() } label: { Label { Text("Blocca") } icon: { Theme.icon("lock", size: 20) } }
-                .help("Blocca (⌘L)")
+            Button { model.lock() } label: { Label { Text("Lock") } icon: { Theme.icon("lock", size: 20) } }
+                .help("Lock (⌘L)")
         }
     }
 
@@ -319,16 +320,15 @@ struct BrowserView: View {
     private var empty: some View {
         VStack(alignment: .leading, spacing: Theme.space3) {
             Theme.icon(targeted ? "import" : "eye-off", size: 32).foregroundStyle(targeted ? Theme.brass : Theme.inkMuted)
-            Text(targeted ? "Rilascia per nascondere" : "Ancora niente qui").font(Theme.title).foregroundStyle(Theme.ink)
-            Text("Trascina foto e video dal Finder in questa finestra. Dopo l'importazione puoi spostare gli originali nel Cestino.")
+            Text(targeted ? "Drop to hide" : "Nothing here yet").font(Theme.title).foregroundStyle(Theme.ink)
+            Text("Drag photos and videos from Finder into this window. After importing, you can move the originals to the Trash.")
                 .font(Theme.headline.weight(.regular)).foregroundStyle(Theme.inkMuted)
-                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: Theme.space2) {
                 Button { model.importPanel() } label: {
-                    HStack(spacing: Theme.space2) { Theme.icon("import"); Text("Scegli file…") }
+                    HStack(spacing: Theme.space2) { Theme.icon("import"); Text("Choose Files…") }
                 }
                 .buttonStyle(PrimaryButton())
-                Text("oppure premi ⌘O").font(Theme.meta).foregroundStyle(Theme.inkMuted)
+                Text("or press ⌘O").font(Theme.meta).foregroundStyle(Theme.inkMuted)
             }
         }
         .frame(maxWidth: 420, alignment: .leading)
@@ -370,7 +370,7 @@ struct BrowserView: View {
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { model.selection = []; focused = true })
     }
 
-    /// Path from "Archivio" to the open folder; each crumb opens its folder and accepts drops.
+    /// Path from the library root to the open folder; each crumb opens its folder and accepts drops.
     private var breadcrumbs: some View {
         var trail = [model.folder ?? model.root]
         while let last = trail.last, last.path != model.root.path, last.isUnder(model.root) {
@@ -394,7 +394,7 @@ struct BrowserView: View {
         Button { if !current { model.folder = url } } label: {
             HStack(spacing: Theme.space1) {
                 Theme.icon("folder", size: 14)
-                Text(url.path == model.root.path ? "Archivio" : url.lastPathComponent).lineLimit(1)
+                Text(url.path == model.root.path ? String(localized: "Library") : url.lastPathComponent).lineLimit(1)
             }
             .font(Theme.label)
             .foregroundStyle(current ? Theme.ink : Theme.inkMuted)
@@ -410,7 +410,7 @@ struct BrowserView: View {
     private func sidebarRow(_ url: URL) -> some View {
         let active = model.folder == url || dropFolder == url
         return Label {
-            Text(url == model.root ? "Archivio" : url.lastPathComponent).font(Theme.label)
+            Text(url == model.root ? String(localized: "Library") : url.lastPathComponent).font(Theme.label)
         } icon: {
             Theme.icon("folder").foregroundStyle(active ? Theme.brass : Theme.inkMuted)
         }
@@ -448,38 +448,43 @@ struct BrowserView: View {
     private var table: some View {
         @Bindable var model = model
         return Table(of: URL.self, selection: $model.selection) {
-            TableColumn("Nome") { url in
+            TableColumn("Name") { url in
                 Label { Text(url.lastPathComponent).font(Theme.body) } icon: {
-                    Theme.icon(url.isFolder ? "folder" : url.isVideo ? "video" : "image").foregroundStyle(Theme.inkMuted)
+                    Theme.icon(url.isFolder ? "folder" : url.isVideo ? "video" : "image").foregroundStyle(url.isFolder ? Theme.brass : Theme.inkMuted)
                 }
             }
-            TableColumn("Tipo") { url in
-                Text(url.isFolder ? "Cartella" : url.type.localizedDescription ?? "").font(Theme.body).foregroundStyle(Theme.inkMuted)
+            TableColumn("Kind") { url in
+                Text(url.isFolder ? String(localized: "Folder") : url.type.localizedDescription ?? "").font(Theme.body).foregroundStyle(Theme.inkMuted)
             }
-            TableColumn("Dimensione") { url in
+            TableColumn("Size") { url in
                 Text(url.isFolder ? "—" : ByteCountFormatter.string(fromByteCount: Int64(url.size), countStyle: .file)).font(Theme.meta)
             }
-            TableColumn("Modificato") { url in Text(url.modified, format: .dateTime).font(Theme.meta) }
+            TableColumn("Modified") { url in Text(url.modified, format: .dateTime).font(Theme.meta) }
         } rows: {
             ForEach(model.items) { url in
                 TableRow(url).draggable(url) // file URL: moved when dropped in the app, exported in clear outside
             }
         }
         .scrollContentBackground(.hidden)
+        .alternatingRowBackgrounds(.disabled)
         .contextMenu(forSelectionType: URL.self) { urls in menu(for: urls) } primaryAction: { urls in
             if urls.count == 1, let url = urls.first { model.open(url) }
         }
     }
 
-    @ViewBuilder private func menu(for urls: Set<URL>) -> some View {
+    private func menu(for urls: Set<URL>) -> some View {
+        Group { menuItems(for: urls) }.labelStyle(.titleAndIcon) // context menus hide the icons otherwise
+    }
+
+    @ViewBuilder private func menuItems(for urls: Set<URL>) -> some View {
         if urls.count == 1, let url = urls.first {
-            Button("Apri") { model.open(url) }
-            Button("Rinomina") { model.selection = urls; model.renaming = url }
+            Button("Open", systemImage: "eye") { model.open(url) }
+            Button("Rename", systemImage: "pencil") { model.selection = urls; model.renaming = url }
             Divider()
         }
         if !urls.isEmpty {
-            Button("Esporta…") { model.askExport(urls) }
-            Button("Elimina", role: .destructive) { model.askDelete(urls) }
+            Button("Export…", systemImage: "square.and.arrow.up") { model.askExport(urls) }
+            Button("Delete", systemImage: "trash", role: .destructive) { model.askDelete(urls) }
         }
     }
 
@@ -495,6 +500,7 @@ struct Tile: View {
     var dropTarget = false
     @State private var image: NSImage?
     @State private var duration: String?
+    @State private var hovered = false
 
     var body: some View {
         Color.clear
@@ -503,7 +509,7 @@ struct Tile: View {
             .overlay {
                 if url.isFolder {
                     VStack(spacing: Theme.space2) {
-                        Theme.icon("folder", size: 32).foregroundStyle(Theme.inkMuted)
+                        Theme.icon("folder", size: 40).foregroundStyle(Theme.brass)
                         Text(url.lastPathComponent).font(Theme.label).foregroundStyle(Theme.ink)
                             .lineLimit(2).multilineTextAlignment(.center).padding(.horizontal, Theme.space2)
                     }
@@ -534,11 +540,13 @@ struct Tile: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.radiusSm)
-                    .strokeBorder(selected || dropTarget ? Theme.brass : Theme.line,
+                    .strokeBorder(selected || dropTarget ? Theme.brass : hovered ? Theme.lineStrong : Theme.line,
                                   style: StrokeStyle(lineWidth: selected || dropTarget ? 2 : 1, dash: dropTarget ? [6, 4] : []))
             }
             .background(dropTarget ? Theme.brassSubtle : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusSm))
             .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .animation(Theme.quick, value: hovered)
             .help(url.lastPathComponent)
             .task(id: url) {
                 guard url.isMedia else { return }

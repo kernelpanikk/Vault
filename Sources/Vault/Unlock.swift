@@ -29,9 +29,9 @@ enum TouchID {
     /// One Touch ID prompt. nil if cancelled, failed, or the enrolled fingerprints changed.
     static func load() async -> String? {
         let context = LAContext()
-        context.localizedFallbackTitle = "Usa password"
+        context.localizedFallbackTitle = String(localized: "Use Password")
         guard (try? await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
-                                                 localizedReason: "sbloccare l'archivio")) == true,
+                                                 localizedReason: String(localized: "unlock your vault"))) == true,
               let data = try? Data(contentsOf: url),
               let parts = try? PropertyListDecoder().decode([Data].self, from: data), parts.count == 3,
               let key = try? SecureEnclave.P256.KeyAgreement.PrivateKey(dataRepresentation: parts[0], authenticationContext: context),

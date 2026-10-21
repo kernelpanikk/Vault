@@ -4,6 +4,13 @@ import SwiftUI
 struct VaultApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
+    init() {
+        // English unless the user picks a language in Settings, whatever the system language is.
+        if UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?["AppleLanguages"] == nil {
+            UserDefaults.standard.set(["en"], forKey: "AppleLanguages")
+        }
+    }
+
     var body: some Scene {
         Window("Vault", id: "main") {
             RootView().environment(delegate.model)
@@ -72,7 +79,7 @@ final class AppModel {
             }.value
         } catch {
             if create && vault.exists { state = .locked }
-            self.error = create ? "Impossibile creare l'archivio." : "Password errata."
+            self.error = create ? String(localized: "Couldn't create the vault.") : String(localized: "Wrong password.")
             return
         }
         guard locks == locksBefore else { return vault.unmount() } // sleep or lock screen arrived while mounting
@@ -199,37 +206,76 @@ struct VaultCommands: Commands {
     // No .disabled tied to model state: menu items are not reliably refreshed, so each action checks the state itself.
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Nuova cartella") { model.newFolder() }
+            Button("New Folder", systemImage: "folder.badge.plus") { model.newFolder() }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
-            Button("Cartella superiore") { model.openParent() }
+            Button("Enclosing Folder", systemImage: "arrow.up") { model.openParent() }
                 .keyboardShortcut(.upArrow, modifiers: .command)
-            Button("Importa…") { model.importPanel() }
+            Button("Import…", systemImage: "square.and.arrow.down") { model.importPanel() }
                 .keyboardShortcut("o")
-            Button("Esporta…") { model.askExport(model.selection) }
+            Button("Export…", systemImage: "square.and.arrow.up") { model.askExport(model.selection) }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
-            Button("Elimina") { model.askDelete(model.selection) }
+            Button("Delete", systemImage: "trash") { model.askDelete(model.selection) }
                 .keyboardShortcut(.delete)
             Divider()
-            Button("Blocca") { model.lock() }
+            Button("Lock", systemImage: "lock") { model.lock() }
                 .keyboardShortcut("l")
-            Button("Blocca e compatta") { model.lockAndCompact() }
+            Button("Lock and Compact", systemImage: "lock.shield") { model.lockAndCompact() }
         }
     }
 }
 
 struct SettingsView: View {
+    static let languages = ["en", "it", "fr", "es", "de", "pt-BR", "zh-Hans", "ja"] // one Resources/<code>.lproj each
+
     @AppStorage("lockMinutes") private var minutes = 5
     @AppStorage("lockOnBackground") private var onBackground = false
+    @State private var language = (UserDefaults.standard.array(forKey: "AppleLanguages")?.first as? String) ?? "en"
+    private let running = Bundle.main.preferredLocalizations.first ?? "en"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.space3) {
-            Stepper("Blocca dopo \(minutes) min di inattività", value: $minutes, in: 1...60)
-            Toggle("Blocca quando passi a un'altra app", isOn: $onBackground)
+        Form {
+            Section("General") {
+                Picker(selection: $language) {
+                    ForEach(Self.languages, id: \.self) { code in Text(Self.nativeName(code)).tag(code) }
+                } label: { Label("Language", systemImage: "globe") }
+                .onChange(of: language) { _, code in UserDefaults.standard.set([code], forKey: "AppleLanguages") }
+                if language != running {
+                    HStack {
+                        Label("Restart Vault to use the new language.", systemImage: "arrow.clockwise")
+                            .foregroundStyle(Theme.inkMuted)
+                        Spacer()
+                        Button("Restart Now", action: Self.relaunch)
+                    }
+                }
+            }
+            Section("Security") {
+                Picker(selection: $minutes) {
+                    ForEach(Set([1, 2, 5, 10, 15, 30, 60, minutes]).sorted(), id: \.self) { Text("\($0) min").tag($0) }
+                } label: { Label("Lock after inactivity", systemImage: "timer") }
+                Toggle(isOn: $onBackground) { Label("Lock when switching to another app", systemImage: "macwindow.on.rectangle") }
+            }
         }
+        .formStyle(.grouped)
+        .scrollDisabled(true)
         .font(Theme.body)
         .tint(Theme.brass)
-        .padding(Theme.space6)
-        .fixedSize() // window sized to its content, so nothing is clipped
+        .frame(width: 480)
+        .fixedSize(horizontal: false, vertical: true) // window sized to its content, so nothing is clipped
+    }
+
+    /// "Français", "日本語"…: each language written in itself.
+    static func nativeName(_ code: String) -> String {
+        let locale = Locale(identifier: code)
+        return locale.localizedString(forIdentifier: code)?.capitalized(with: locale) ?? code
+    }
+
+    /// Quits normally (lock + compact), then a detached shell reopens the app once this process is gone.
+    static func relaunch() {
+        let shell = Process()
+        shell.executableURL = URL(fileURLWithPath: "/bin/sh")
+        shell.arguments = ["-c", "while kill -0 \(getpid()) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$0\"", Bundle.main.bundlePath]
+        try? shell.run()
+        NSApp.terminate(nil)
     }
 }
