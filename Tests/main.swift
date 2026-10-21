@@ -46,6 +46,7 @@ do {
 
     vault.unmount()
     check(!vault.isMounted, "smontato")
+    check(vault.attachedDevices().isEmpty, "nessuna immagine ancora collegata")
     check(vault.sizeOnDisk > 0 && vault.sizeOnDisk < 1 << 30, "spazio reale, non il massimo da 200 GB")
     let before = vault.sizeOnDisk
     try vault.compact(password: "correct horse")
@@ -54,6 +55,18 @@ do {
 
     try vault.mount(password: "correct horse")
     check((try? String(contentsOf: vault.mountURL.appending(path: "a.txt"), encoding: .utf8)) == "ciao", "dati persistiti")
+    vault.unmount()
+
+    // Image left attached somewhere else (crash, half-done detach): mount must still end up at .mnt.
+    let elsewhere = vault.dir.appending(path: "elsewhere")
+    try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+    let attach = Process()
+    attach.executableURL = URL(fileURLWithPath: "/bin/sh")
+    attach.arguments = ["-c", "printf 'correct horse' | hdiutil attach \"$0\" -stdinpass -nobrowse -mountpoint \"$1\" -quiet", vault.bundleURL.path, elsewhere.path]
+    try attach.run(); attach.waitUntilExit()
+    check(!vault.attachedDevices().isEmpty, "immagine collegata altrove")
+    try vault.mount(password: "correct horse")
+    check(vault.isMounted && vault.attachedDevices().count == 1, "mount stacca l'immagine collegata altrove e monta in .mnt")
 } catch {
     check(false, "hdiutil: \(error.localizedDescription)")
 }
