@@ -337,7 +337,7 @@ struct BrowserView: View {
         .background {
             RoundedRectangle(cornerRadius: Theme.radiusMd)
                 .fill(targeted ? Theme.brassSubtle : .clear)
-                .strokeBorder(targeted ? Theme.brass : Theme.lineStrong, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                .strokeBorder(targeted ? Theme.brass : .clear, lineWidth: 1.5) // outline only while something is dragged over
                 .padding(Theme.space6)
         }
         .animation(Theme.quick, value: targeted)
@@ -541,7 +541,7 @@ struct Tile: View {
             .overlay {
                 RoundedRectangle(cornerRadius: Theme.radiusSm)
                     .strokeBorder(selected || dropTarget ? Theme.brass : hovered ? Theme.lineStrong : Theme.line,
-                                  style: StrokeStyle(lineWidth: selected || dropTarget ? 2 : 1, dash: dropTarget ? [6, 4] : []))
+                                  lineWidth: selected || dropTarget ? 2 : 1)
             }
             .background(dropTarget ? Theme.brassSubtle : .clear, in: RoundedRectangle(cornerRadius: Theme.radiusSm))
             .contentShape(Rectangle())
