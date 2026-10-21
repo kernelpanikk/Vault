@@ -41,6 +41,7 @@ struct Vault {
     }
 
     func mount(password: String) throws {
+        unmount() // a stale attachment (crash, or a detach that left the image attached) would make attach fail
         try FileManager.default.createDirectory(at: mountURL, withIntermediateDirectories: true)
         do {
             try hdiutil(["attach", bundleURL.path, "-stdinpass", "-nobrowse", "-noautoopen", "-noverify",
@@ -48,6 +49,11 @@ struct Vault {
         } catch {
             rmdir(mountURL.path)
             throw error
+        }
+        // An image left attached elsewhere makes attach "succeed" without mounting here: never browse a plain folder.
+        guard isMounted else {
+            unmount()
+            throw VaultError(errorDescription: "The vault volume did not mount at \(mountURL.path).")
         }
         // mdutil -i off needs root; this marker keeps Spotlight out without it.
         FileManager.default.createFile(atPath: mountURL.appending(path: ".metadata_never_index").path, contents: nil)
@@ -58,27 +64,45 @@ struct Vault {
         try hdiutil(["compact", bundleURL.path, "-stdinpass", "-batteryallowed"], stdin: password)
     }
 
+    /// Detaches every disk attached from this bundle, by device, wherever it is mounted: an attachment left
+    /// behind (crash, a remount during quit) would otherwise make the next attach fail or mount nowhere.
     func unmount() {
-        if isMounted { try? hdiutil(["detach", mountURL.path, "-force"]) }
+        for device in attachedDevices() { _ = try? hdiutil(["detach", device, "-force"]) }
         // rmdir only removes an empty dir, never vault contents.
         // shortcut: while the app runs, macOS may keep the (empty) mountpoint busy, so it can stay until the next launch.
         rmdir(mountURL.path)
     }
 
-    private func hdiutil(_ args: [String], stdin: String? = nil) throws {
+    /// Whole-disk device of each attachment of this bundle ("/dev/disk4"), from `hdiutil info`.
+    func attachedDevices() -> [String] {
+        guard let data = try? hdiutil(["info", "-plist"]),
+              let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let images = info["images"] as? [[String: Any]] else { return [] }
+        let bundle = bundleURL.resolvingSymlinksInPath().path
+        return images.filter { ($0["image-path"] as? String).map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } == bundle }
+            .compactMap { image in
+                ((image["system-entities"] as? [[String: Any]]) ?? []).compactMap { $0["dev-entry"] as? String }
+                    .min { $0.count < $1.count } // "/dev/disk4" before its slices "/dev/disk4s2"
+            }
+    }
+
+    @discardableResult
+    private func hdiutil(_ args: [String], stdin: String? = nil) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
         process.arguments = args
-        let input = Pipe(), errors = Pipe()
+        let input = Pipe(), output = Pipe(), errors = Pipe()
         process.standardInput = input
         process.standardError = errors
-        process.standardOutput = FileHandle.nullDevice
+        process.standardOutput = output
         try process.run()
         if let stdin { input.fileHandleForWriting.write(Data(stdin.utf8)) }
         try input.fileHandleForWriting.close()
+        let data = output.fileHandleForReading.readDataToEndOfFile() // stderr is tiny, so reading stdout first can't stall
         let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { throw VaultError(errorDescription: message) }
+        return data
     }
 }
 

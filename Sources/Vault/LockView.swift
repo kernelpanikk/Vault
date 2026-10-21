@@ -6,6 +6,9 @@ struct LockView: View {
     @State private var password = ""
     @State private var confirm = ""
     @State private var attempts = 0
+    #if DEBUG
+    private static var usedTestPassword = false
+    #endif
 
     private var setup: Bool { model.state == .setup }
     private var canSubmit: Bool {
@@ -81,7 +84,12 @@ struct LockView: View {
         }
         .task {
             #if DEBUG // screenshots of a throwaway vault: VAULT_DIR=… VAULT_TEST_PASSWORD=… Vault
-            if let test = ProcessInfo.processInfo.environment["VAULT_TEST_PASSWORD"] { return await model.unlock(password: test, remember: false) }
+            // Once per launch: lock() at quit shows this view again, and a remount there would outlive the app.
+            if let test = ProcessInfo.processInfo.environment["VAULT_TEST_PASSWORD"] {
+                guard !Self.usedTestPassword else { return }
+                Self.usedTestPassword = true
+                return await model.unlock(password: test, remember: false)
+            }
             #endif
             if NSApp.isActive { await model.unlockWithBiometrics() }
         }
