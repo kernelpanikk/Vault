@@ -16,9 +16,9 @@ struct LockView: View {
         VStack(spacing: Theme.space6) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 64, height: 64)
             VStack(spacing: Theme.space2) {
-                Text(setup ? "Crea l'archivio" : "Vault è bloccato").font(Theme.display).foregroundStyle(Theme.ink)
-                Text(setup ? "Scegli la master password. Se la dimentichi, i file non si recuperano."
-                           : "Cifrato solo su questo Mac")
+                Text(setup ? "Create your vault" : "Vault is locked").font(Theme.display).foregroundStyle(Theme.ink)
+                Text(setup ? "Choose a master password. If you forget it, your files can't be recovered."
+                           : "Encrypted on this Mac only")
                     .font(Theme.body).foregroundStyle(Theme.inkMuted).multilineTextAlignment(.center)
             }
 
@@ -30,19 +30,20 @@ struct LockView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Sblocca con Touch ID")
+                .accessibilityLabel("Unlock with Touch ID")
+                .help("Unlock with Touch ID")
                 HStack(spacing: Theme.space3) {
                     Rectangle().fill(Theme.line).frame(height: 1)
-                    Text("oppure usa la master password").font(Theme.caption).foregroundStyle(Theme.inkMuted).fixedSize()
+                    Text("or use your master password").font(Theme.caption).foregroundStyle(Theme.inkMuted).fixedSize()
                     Rectangle().fill(Theme.line).frame(height: 1)
                 }
             }
 
             VStack(spacing: Theme.space3) {
-                PasswordField(placeholder: setup ? "Master password (min. 8)" : "Master password",
+                PasswordField(placeholder: setup ? "Master password (at least 8 characters)" : "Master password",
                               text: $password, error: model.error != nil, autofocus: true, onSubmit: submit)
                 if setup {
-                    PasswordField(placeholder: "Ripeti la password", text: $confirm, error: false, onSubmit: submit)
+                    PasswordField(placeholder: "Repeat password", text: $confirm, error: false, onSubmit: submit)
                     ProgressView(value: strength(password)).tint(strength(password) < 0.5 ? Theme.danger : Theme.brass)
                 }
                 if let error = model.error {
@@ -53,7 +54,7 @@ struct LockView: View {
                     .font(Theme.caption).foregroundStyle(Theme.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Button(setup ? "Crea archivio" : "Sblocca", action: submit)
+                Button(setup ? "Create Vault" : "Unlock", action: submit)
                     .buttonStyle(PrimaryButton(large: true))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSubmit)
@@ -63,6 +64,15 @@ struct LockView: View {
         .padding(Theme.space12)
         .modifier(Shake(animatableData: CGFloat(attempts)))
         .frame(maxWidth: .infinity, maxHeight: .infinity) // fill the window so it stays resizable
+        .overlay(alignment: .bottom) {
+            HStack(spacing: Theme.space6) {
+                Label("AES-256", systemImage: "lock.shield")
+                Label("Touch ID", systemImage: "touchid")
+                Label("Offline", systemImage: "wifi.slash")
+            }
+            .font(Theme.caption).foregroundStyle(Theme.inkMuted)
+            .padding(Theme.space6)
+        }
         .background(Theme.bg)
         .onChange(of: model.error) { _, error in
             guard error != nil else { return }
@@ -96,7 +106,7 @@ struct LockView: View {
 
 /// Masked field: `key` icon, `line-strong` border, `brass` when focused, `danger` on error.
 struct PasswordField: View {
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     @Binding var text: String
     let error: Bool
     var autofocus = false

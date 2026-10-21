@@ -66,15 +66,15 @@ struct Viewer: View {
     private var controls: some View {
         HStack(spacing: Theme.space3) {
             Button { model.viewing = nil } label: { Theme.icon("close") }
-                .keyboardShortcut(.cancelAction)
-            Button { step(-1) } label: { Image(systemName: "chevron.left") }
-            Button { step(1) } label: { Image(systemName: "chevron.right") }
+                .keyboardShortcut(.cancelAction).help("Close")
+            Button { step(-1) } label: { Image(systemName: "chevron.left") }.help("Previous")
+            Button { step(1) } label: { Image(systemName: "chevron.right") }.help("Next")
             Text(url.lastPathComponent).lineLimit(1).truncationMode(.middle)
             if !url.isVideo {
                 Button { zoom = clamp(zoom / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }
-                    .keyboardShortcut("-")
+                    .keyboardShortcut("-").help("Zoom Out")
                 Button { zoom = clamp(zoom * 1.25) } label: { Image(systemName: "plus.magnifyingglass") }
-                    .keyboardShortcut("=")
+                    .keyboardShortcut("=").help("Zoom In")
                 // Space closes images like Quick Look; in videos it stays play/pause.
                 Button("") { model.viewing = nil }
                     .keyboardShortcut(.space, modifiers: []).frame(width: 0).opacity(0)

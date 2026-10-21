@@ -58,6 +58,18 @@ do {
     check(false, "hdiutil: \(error.localizedDescription)")
 }
 
+// Every language has every string, with the same placeholders as the English key.
+let specifiers = try! Regex("%(lld|@)")
+for lang in ["it", "fr", "es", "de", "pt-BR", "zh-Hans", "ja"] {
+    let table = NSDictionary(contentsOfFile: "Resources/\(lang).lproj/Localizable.strings") as? [String: String] ?? [:]
+    let reference = NSDictionary(contentsOfFile: "Resources/it.lproj/Localizable.strings") as? [String: String] ?? [:]
+    check(!table.isEmpty && Set(table.keys) == Set(reference.keys), "\(lang): stesse chiavi di it")
+    for (key, value) in table where key.matches(of: specifiers).count != value.matches(of: specifiers).count {
+        check(false, "\(lang): segnaposto diversi in “\(key)”")
+    }
+    check(NSDictionary(contentsOfFile: "Resources/\(lang).lproj/Localizable.stringsdict")?.count == 4, "\(lang): plurali")
+}
+
 vault.unmount()
 try? FileManager.default.removeItem(at: vault.dir)
 exit(failures == 0 ? 0 : 1)

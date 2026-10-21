@@ -40,11 +40,17 @@ Solo locale. Al blocco il volume viene smontato.
   (claude.ai/artifact/21hQm2FSHgtY5X8UWwFkbm): colori OKLCH convertiti in sRGB,
   Hanken Grotesk + IBM Plex Mono in Resources/Fonts, icone SVG in Resources/Icons,
   icona app Resources/AppIcon.icns da design/vault-mark.svg.
-- Testi in italiano (regola del progetto), ma con le regole di contenuto del
-  design system: verbi specifici, conseguenze esplicite, niente "OK".
+- Testi UI: chiavi in inglese nel codice (lingua di default), tradotti in
+  Resources/<lingua>.lproj: it, fr, es, de, pt-BR, zh-Hans, ja (scelta dell'utente,
+  21 Oct 2026). Le tabelle si generano da scripts/l10n.py: aggiungi lì ogni nuova
+  stringa, poi `python3 scripts/l10n.py Resources`; i test controllano che ogni
+  lingua abbia tutte le chiavi. Lingua scelta in Impostazioni (AppleLanguages
+  dell'app, serve un riavvio). Regole di contenuto del design system: verbi
+  specifici, conseguenze esplicite, niente "OK".
 - Solo build di debug: VAULT_DIR=<cartella> usa un archivio di prova,
   VAULT_TEST_PASSWORD=<pw> lo sblocca da solo (per screenshot).
-- Testi UI in italiano, brevi.
+- Testi UI brevi. Icone ovunque aiutino: SVG del design system nelle viste,
+  SF Symbols nei menu (con .labelStyle(.titleAndIcon), altrimenti non si vedono).
 
 ## Comandi
 - Build: scripts/build-app.sh [--debug] [--install]  → build/Vault.app
