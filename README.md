@@ -161,3 +161,9 @@ Resources/*.lproj   translations (generated: python3 scripts/l10n.py Resources)
 Tests/main.swift     tests, including translation completeness
 docs/checklist.md    anti-leak checklist
 ```
+
+## License
+
+Code is released under the [MIT License](LICENSE).
+
+The bundled fonts in `Resources/Fonts` ([Hanken Grotesk](https://github.com/marcologous/hanken-grotesk) and [IBM Plex Mono](https://github.com/IBM/plex)) are third-party and remain under the [SIL Open Font License 1.1](https://openfontlicense.org).
